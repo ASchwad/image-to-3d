@@ -111,20 +111,14 @@ export class GeminiImageService {
     ];
   }
 
-  private createPerspectivePrompt(
-    analysis: ImageAnalysis,
-    perspective: PerspectiveView,
-    additionalInstructions?: string
-  ): string {
-    return `Professional orthographic ${perspective.description} of the EXACT SAME ${analysis.subject} from the reference image.
+  private getBasePrompt(additionalInstructions?: string): string {
+    return `Professional orthographic views of the EXACT SAME object from the reference image.
 
 CRITICAL: This must be the identical subject/object, not a different one. Keep all identifying features, colors, shapes, and details exactly the same.
 
-Subject Identity: ${analysis.subject}
-Style: ${analysis.style}
 Lighting: Standardized soft, even lighting - bright, diffused, shadow-free illumination
 Background: Pure white background (#FFFFFF) - clean, seamless, infinite white
-Composition: Centered, full object visible, ${perspective.angle} rotation
+Composition: Centered, full object visible
 Quality: High detail, sharp focus, product photography style
 
 STANDARDIZED LIGHTING REQUIREMENTS:
@@ -147,20 +141,39 @@ WHITE BACKGROUND REQUIREMENTS:
 Technical requirements:
 - This is the SAME object as in the reference image - keep all unique features
 - Maintain exact same proportions, scale, and dimensions
-- Identical color palette and materials: ${analysis.materials}
+- Identical color palette and materials from the reference
 - STANDARDIZED LIGHTING: Soft, even, diffused illumination across all views
 - NO harsh shadows or directional lighting effects
 - Orthographic projection (no perspective distortion)
 - Suitable for 3D reconstruction workflow
 - Object centered and fully visible in frame
 - No parts cut off from frame
-- CONSISTENCY IS KEY: This must look like the same object rotated to show the ${perspective.perspective} side
+- CONSISTENCY IS KEY: This must look like the same object rotated to different sides
 - WHITE BACKGROUND ONLY: Pure white background with no environmental elements
 - SHADOW-FREE: Minimal shadows, bright even lighting like a professional light box
 
-${additionalInstructions ? `Additional style instructions: ${additionalInstructions}` : ''}
+${additionalInstructions ? `Additional style instructions: ${additionalInstructions}` : ''}`;
+  }
 
-Generate the ${perspective.perspective} view (${perspective.angle}) of this specific ${analysis.subject} with standardized soft, even lighting on a pure white background. Use bright, diffused, shadow-free illumination like professional light box photography. The subject must remain identical across all perspectives with consistent materials and colors, but ignore the original lighting conditions - use standardized even lighting instead.`;
+  private createPerspectivePrompt(
+    analysis: ImageAnalysis,
+    perspective: PerspectiveView,
+    additionalInstructions?: string,
+    rightViewImage?: GeneratedImage,
+    isFirstPerspective: boolean = false,
+    extraPrompt?: string
+  ): string {
+    const basePrompt = isFirstPerspective ? this.getBasePrompt(additionalInstructions) : '';
+
+    // Special handling for left view with right view reference
+    if (perspective.perspective === 'left' && rightViewImage) {
+      const leftInstruction = `Turn the object by exact 180° to show the opposite side.`;
+      return `${basePrompt}${basePrompt ? '\n\n' : ''}${leftInstruction}${extraPrompt ? `\n\nExtra instructions: ${extraPrompt}` : ''}`;
+    }
+
+    const perspectiveInstruction = `Generate the ${perspective.description} (${perspective.angle}) with standardized soft, even lighting on a pure white background.`;
+
+    return `${basePrompt}${basePrompt ? '\n\n' : ''}${perspectiveInstruction}${extraPrompt ? `\n\nExtra instructions: ${extraPrompt}` : ''}`;
   }
 
   async generate3DPerspectivesWithDetails(
@@ -177,15 +190,27 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
     // First analyze the reference image
     const analysis = await this.analyzeImage(referenceImage);
     const perspectives = this.getPerspectiveViews();
+
+    // Reorder perspectives: right first, then others, left last
+    const orderedPerspectives = [
+      perspectives.find(p => p.perspective === 'right')!,
+      perspectives.find(p => p.perspective === 'front')!,
+      perspectives.find(p => p.perspective === 'back')!,
+      perspectives.find(p => p.perspective === 'left')!,
+    ];
+
     const allImages: GeneratedImage[] = [];
     const prompts: {[perspective: string]: string} = {};
+    let rightViewImage: GeneratedImage | undefined;
 
-    // Generate all prompts first
-    perspectives.forEach(perspective => {
+    // Generate initial prompts (left view prompt will be updated later)
+    orderedPerspectives.forEach((perspective, index) => {
       const perspectivePrompt = this.createPerspectivePrompt(
         analysis,
         perspective,
-        additionalInstructions
+        additionalInstructions,
+        undefined,
+        index === 0 // Only first perspective gets base prompt
       );
       prompts[perspective.perspective] = perspectivePrompt;
     });
@@ -195,8 +220,8 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
       onAnalysisComplete(analysis, prompts);
     }
 
-    // Generate each perspective sequentially for consistency
-    for (const perspective of perspectives) {
+    // Generate each perspective sequentially in the new order
+    for (const perspective of orderedPerspectives) {
       // Notify that we're starting this perspective
       if (onPerspectiveStart) {
         onPerspectiveStart(perspective.perspective);
@@ -208,8 +233,21 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
 
       const model = 'gemini-2.5-flash-image-preview';
 
+      // For left view, update the prompt to include right view reference
+      let currentPrompt = prompts[perspective.perspective];
+      if (perspective.perspective === 'left' && rightViewImage) {
+        currentPrompt = this.createPerspectivePrompt(
+          analysis,
+          perspective,
+          additionalInstructions,
+          rightViewImage,
+          false // Left view doesn't need base prompt since it was shown for right view
+        );
+        prompts[perspective.perspective] = currentPrompt; // Update stored prompt
+      }
+
       const parts: any[] = [
-        { text: prompts[perspective.perspective] },
+        { text: currentPrompt },
         {
           inlineData: {
             mimeType: referenceImage.mimeType,
@@ -217,6 +255,16 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
           },
         },
       ];
+
+      // Add right view image as additional reference for left view generation
+      if (perspective.perspective === 'left' && rightViewImage) {
+        parts.push({
+          inlineData: {
+            mimeType: rightViewImage.mimeType,
+            data: rightViewImage.data,
+          },
+        });
+      }
 
       const contents = [
         {
@@ -251,6 +299,11 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
           };
 
           allImages.push(newImage);
+
+          // Store right view image for later use in left view generation
+          if (perspective.perspective === 'right') {
+            rightViewImage = newImage;
+          }
 
           // Call the image callback immediately when each image is generated
           if (onImageGenerated) {
@@ -381,7 +434,9 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
     analysis: ImageAnalysis,
     additionalInstructions?: string,
     onImageGenerated?: (image: GeneratedImage) => void,
-    onPerspectiveStart?: (perspective: string) => void
+    onPerspectiveStart?: (perspective: string) => void,
+    rightViewImage?: GeneratedImage,
+    extraPrompt?: string
   ): Promise<GeneratedImage> {
     const perspectives = this.getPerspectiveViews();
     const targetPerspective = perspectives.find(p => p.perspective === perspective);
@@ -400,7 +455,14 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
     };
 
     const model = 'gemini-2.5-flash-image-preview';
-    const prompt = this.createPerspectivePrompt(analysis, targetPerspective, additionalInstructions);
+    const prompt = this.createPerspectivePrompt(
+      analysis,
+      targetPerspective,
+      additionalInstructions,
+      perspective === 'left' ? rightViewImage : undefined,
+      true, // Regenerated perspectives always show base prompt
+      extraPrompt
+    );
 
     const parts: any[] = [
       { text: prompt },
@@ -411,6 +473,16 @@ Generate the ${perspective.perspective} view (${perspective.angle}) of this spec
         },
       },
     ];
+
+    // Add right view image as additional reference for left view regeneration
+    if (perspective === 'left' && rightViewImage) {
+      parts.push({
+        inlineData: {
+          mimeType: rightViewImage.mimeType,
+          data: rightViewImage.data,
+        },
+      });
+    }
 
     const contents = [
       {
