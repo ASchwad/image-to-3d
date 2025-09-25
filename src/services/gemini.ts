@@ -1,12 +1,12 @@
-import { GoogleGenAI } from '@google/genai';
-import mime from 'mime';
+import { GoogleGenAI } from "@google/genai";
+import mime from "mime";
 
 export interface GeneratedImage {
   id: string;
   data: string; // base64 data
   mimeType: string;
   fileName: string;
-  perspective?: 'front' | 'right' | 'back' | 'left';
+  perspective?: "front" | "right" | "back" | "left";
 }
 
 export interface ReferenceImage {
@@ -24,7 +24,7 @@ export interface ImageAnalysis {
 }
 
 export interface PerspectiveView {
-  perspective: 'front' | 'right' | 'back' | 'left';
+  perspective: "front" | "right" | "back" | "left";
   angle: string;
   description: string;
 }
@@ -39,7 +39,7 @@ export class GeminiImageService {
   }
 
   async analyzeImage(referenceImage: ReferenceImage): Promise<ImageAnalysis> {
-    const model = 'gemini-2.0-flash-exp';
+    const model = "gemini-2.0-flash-exp";
 
     const prompt = `Analyze this image and provide detailed information for 3D asset generation.
 
@@ -55,23 +55,28 @@ export class GeminiImageService {
 
     const response = await this.ai.models.generateContent({
       model,
-      contents: [{
-        role: 'user',
-        parts: [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: referenceImage.mimeType,
-              data: referenceImage.data,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType: referenceImage.mimeType,
+                data: referenceImage.data,
+              },
             },
-          },
-        ],
-      }],
+          ],
+        },
+      ],
     });
 
     try {
-      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
-      const cleanText = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const text = response.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
+      const cleanText = text
+        .replace(/```json\n?/g, "")
+        .replace(/```\n?/g, "")
+        .trim();
       return JSON.parse(cleanText);
     } catch {
       // Fallback analysis
@@ -81,7 +86,7 @@ export class GeminiImageService {
         lighting: "studio lighting",
         background: "neutral",
         materials: "varied materials",
-        objectType: "object"
+        objectType: "object",
       };
     }
   }
@@ -89,25 +94,26 @@ export class GeminiImageService {
   private getPerspectiveViews(): PerspectiveView[] {
     return [
       {
-        perspective: 'front',
-        angle: '0°',
-        description: 'facing camera directly, symmetrical composition, front view'
+        perspective: "front",
+        angle: "0°",
+        description:
+          "facing camera directly, symmetrical composition, front view",
       },
       {
-        perspective: 'right',
-        angle: '90°',
-        description: '90-degree profile view, right side silhouette visible'
+        perspective: "right",
+        angle: "90°",
+        description: "90-degree profile view, right side silhouette visible",
       },
       {
-        perspective: 'back',
-        angle: '180°',
-        description: 'rear view, back side visible, opposite of front view'
+        perspective: "back",
+        angle: "180°",
+        description: "rear view, back side visible, opposite of front view",
       },
       {
-        perspective: 'left',
-        angle: '270°',
-        description: 'left side profile view, opposite of right side view'
-      }
+        perspective: "left",
+        angle: "270°",
+        description: "left side profile view, opposite of right side view",
+      },
     ];
   }
 
@@ -152,7 +158,11 @@ Technical requirements:
 - WHITE BACKGROUND ONLY: Pure white background with no environmental elements
 - SHADOW-FREE: Minimal shadows, bright even lighting like a professional light box
 
-${additionalInstructions ? `Additional style instructions: ${additionalInstructions}` : ''}`;
+${
+  additionalInstructions
+    ? `Additional style instructions: ${additionalInstructions}`
+    : ""
+}`;
   }
 
   private createPerspectivePrompt(
@@ -160,32 +170,36 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
     perspective: PerspectiveView,
     additionalInstructions?: string,
     rightViewImage?: GeneratedImage,
-    isFirstPerspective: boolean = false,
-    extraPrompt?: string
+    isFirstPerspective: boolean = false
   ): string {
-    const basePrompt = isFirstPerspective ? this.getBasePrompt(additionalInstructions) : '';
+    const basePrompt = isFirstPerspective
+      ? this.getBasePrompt(additionalInstructions)
+      : "";
 
     // Special handling for left view with right view reference
-    if (perspective.perspective === 'left' && rightViewImage) {
+    if (perspective.perspective === "left" && rightViewImage) {
       const leftInstruction = `Turn the object by exact 180° to show the opposite side.`;
-      return `${basePrompt}${basePrompt ? '\n\n' : ''}${leftInstruction}${extraPrompt ? `\n\nExtra instructions: ${extraPrompt}` : ''}`;
+      return leftInstruction;
     }
 
     const perspectiveInstruction = `Generate the ${perspective.description} (${perspective.angle}) with standardized soft, even lighting on a pure white background.`;
 
-    return `${basePrompt}${basePrompt ? '\n\n' : ''}${perspectiveInstruction}${extraPrompt ? `\n\nExtra instructions: ${extraPrompt}` : ''}`;
+    return `${basePrompt}${basePrompt ? "\n\n" : ""}${perspectiveInstruction}`;
   }
 
   async generate3DPerspectivesWithDetails(
     referenceImage: ReferenceImage,
     additionalInstructions?: string,
-    onAnalysisComplete?: (analysis: ImageAnalysis, prompts: {[perspective: string]: string}) => void,
+    onAnalysisComplete?: (
+      analysis: ImageAnalysis,
+      prompts: { [perspective: string]: string }
+    ) => void,
     onImageGenerated?: (image: GeneratedImage) => void,
     onPerspectiveStart?: (perspective: string) => void
   ): Promise<{
     images: GeneratedImage[];
     analysis: ImageAnalysis;
-    prompts: {[perspective: string]: string};
+    prompts: { [perspective: string]: string };
   }> {
     // First analyze the reference image
     const analysis = await this.analyzeImage(referenceImage);
@@ -193,14 +207,14 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
     // Reorder perspectives: right first, then others, left last
     const orderedPerspectives = [
-      perspectives.find(p => p.perspective === 'right')!,
-      perspectives.find(p => p.perspective === 'front')!,
-      perspectives.find(p => p.perspective === 'back')!,
-      perspectives.find(p => p.perspective === 'left')!,
+      perspectives.find((p) => p.perspective === "right")!,
+      perspectives.find((p) => p.perspective === "front")!,
+      perspectives.find((p) => p.perspective === "back")!,
+      perspectives.find((p) => p.perspective === "left")!,
     ];
 
     const allImages: GeneratedImage[] = [];
-    const prompts: {[perspective: string]: string} = {};
+    const prompts: { [perspective: string]: string } = {};
     let rightViewImage: GeneratedImage | undefined;
 
     // Generate initial prompts (left view prompt will be updated later)
@@ -228,14 +242,14 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
       }
 
       const config = {
-        responseModalities: ['IMAGE', 'TEXT'],
+        responseModalities: ["IMAGE", "TEXT"],
       };
 
-      const model = 'gemini-2.5-flash-image-preview';
+      const model = "gemini-2.5-flash-image-preview";
 
       // For left view, update the prompt to include right view reference
       let currentPrompt = prompts[perspective.perspective];
-      if (perspective.perspective === 'left' && rightViewImage) {
+      if (perspective.perspective === "left" && rightViewImage) {
         currentPrompt = this.createPerspectivePrompt(
           analysis,
           perspective,
@@ -256,8 +270,13 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
         },
       ];
 
-      // Add right view image as additional reference for left view generation
-      if (perspective.perspective === 'left' && rightViewImage) {
+      // Add right view image as additional reference for front, back, and left view generation
+      if (
+        (perspective.perspective === "front" ||
+          perspective.perspective === "back" ||
+          perspective.perspective === "left") &&
+        rightViewImage
+      ) {
         parts.push({
           inlineData: {
             mimeType: rightViewImage.mimeType,
@@ -268,7 +287,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
       const contents = [
         {
-          role: 'user',
+          role: "user",
           parts,
         },
       ];
@@ -281,19 +300,26 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
       let imageIndex = 0;
       for await (const chunk of response) {
-        if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
+        if (
+          !chunk.candidates ||
+          !chunk.candidates[0].content ||
+          !chunk.candidates[0].content.parts
+        ) {
           continue;
         }
 
         if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-          const fileName = `${analysis.subject.replace(/\s+/g, '_').toLowerCase()}_${perspective.perspective}`;
+          const fileName = `${analysis.subject
+            .replace(/\s+/g, "_")
+            .toLowerCase()}_${perspective.perspective}`;
           const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-          const fileExtension = mime.getExtension(inlineData.mimeType || '') || 'png';
+          const fileExtension =
+            mime.getExtension(inlineData.mimeType || "") || "png";
 
           const newImage: GeneratedImage = {
             id: `${fileName}_${Date.now()}_${imageIndex}`,
-            data: inlineData.data || '',
-            mimeType: inlineData.mimeType || 'image/png',
+            data: inlineData.data || "",
+            mimeType: inlineData.mimeType || "image/png",
             fileName: `${fileName}.${fileExtension}`,
             perspective: perspective.perspective,
           };
@@ -301,7 +327,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
           allImages.push(newImage);
 
           // Store right view image for later use in left view generation
-          if (perspective.perspective === 'right') {
+          if (perspective.perspective === "right") {
             rightViewImage = newImage;
           }
 
@@ -322,16 +348,22 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
     referenceImage: ReferenceImage,
     additionalInstructions?: string
   ): Promise<GeneratedImage[]> {
-    const result = await this.generate3DPerspectivesWithDetails(referenceImage, additionalInstructions);
+    const result = await this.generate3DPerspectivesWithDetails(
+      referenceImage,
+      additionalInstructions
+    );
     return result.images;
   }
 
-  async generateImages(prompt: string, referenceImages?: ReferenceImage[]): Promise<GeneratedImage[]> {
+  async generateImages(
+    prompt: string,
+    referenceImages?: ReferenceImage[]
+  ): Promise<GeneratedImage[]> {
     const config = {
-      responseModalities: ['IMAGE', 'TEXT'],
+      responseModalities: ["IMAGE", "TEXT"],
     };
 
-    const model = 'gemini-2.5-flash-image-preview';
+    const model = "gemini-2.5-flash-image-preview";
 
     const parts: any[] = [
       {
@@ -341,7 +373,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
     // Add reference images if provided
     if (referenceImages && referenceImages.length > 0) {
-      referenceImages.forEach(image => {
+      referenceImages.forEach((image) => {
         parts.push({
           inlineData: {
             mimeType: image.mimeType,
@@ -353,7 +385,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
     const contents = [
       {
-        role: 'user',
+        role: "user",
         parts,
       },
     ];
@@ -368,19 +400,24 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
     let imageIndex = 0;
 
     for await (const chunk of response) {
-      if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
+      if (
+        !chunk.candidates ||
+        !chunk.candidates[0].content ||
+        !chunk.candidates[0].content.parts
+      ) {
         continue;
       }
 
       if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
         const fileName = `generated_image_${imageIndex++}`;
         const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-        const fileExtension = mime.getExtension(inlineData.mimeType || '') || 'png';
+        const fileExtension =
+          mime.getExtension(inlineData.mimeType || "") || "png";
 
         images.push({
           id: `${fileName}_${Date.now()}`,
-          data: inlineData.data || '',
-          mimeType: inlineData.mimeType || 'image/png',
+          data: inlineData.data || "",
+          mimeType: inlineData.mimeType || "image/png",
           fileName: `${fileName}.${fileExtension}`,
         });
       }
@@ -395,7 +432,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
   downloadImage(image: GeneratedImage): void {
     const url = this.createImageUrl(image);
-    const link = document.createElement('a');
+    const link = document.createElement("a");
     link.href = url;
     link.download = image.fileName;
     document.body.appendChild(link);
@@ -410,16 +447,16 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
         const result = e.target?.result as string;
         if (result) {
           // Remove the data URL prefix (data:image/png;base64,)
-          const base64Data = result.split(',')[1];
+          const base64Data = result.split(",")[1];
           resolve({
             data: base64Data,
             mimeType: file.type,
           });
         } else {
-          reject(new Error('Failed to read file'));
+          reject(new Error("Failed to read file"));
         }
       };
-      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.onerror = () => reject(new Error("Failed to read file"));
       reader.readAsDataURL(file);
     });
   }
@@ -430,16 +467,17 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
   async regenerateSpecificPerspective(
     referenceImage: ReferenceImage,
-    perspective: 'front' | 'right' | 'back' | 'left',
+    perspective: "front" | "right" | "back" | "left",
     analysis: ImageAnalysis,
     additionalInstructions?: string,
     onImageGenerated?: (image: GeneratedImage) => void,
     onPerspectiveStart?: (perspective: string) => void,
-    rightViewImage?: GeneratedImage,
-    extraPrompt?: string
+    rightViewImage?: GeneratedImage
   ): Promise<GeneratedImage> {
     const perspectives = this.getPerspectiveViews();
-    const targetPerspective = perspectives.find(p => p.perspective === perspective);
+    const targetPerspective = perspectives.find(
+      (p) => p.perspective === perspective
+    );
 
     if (!targetPerspective) {
       throw new Error(`Invalid perspective: ${perspective}`);
@@ -451,31 +489,37 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
     }
 
     const config = {
-      responseModalities: ['IMAGE', 'TEXT'],
+      responseModalities: ["IMAGE", "TEXT"],
     };
 
-    const model = 'gemini-2.5-flash-image-preview';
+    const model = "gemini-2.5-flash-image-preview";
     const prompt = this.createPerspectivePrompt(
       analysis,
       targetPerspective,
       additionalInstructions,
-      perspective === 'left' ? rightViewImage : undefined,
-      true, // Regenerated perspectives always show base prompt
-      extraPrompt
+      perspective === "left" ? rightViewImage : undefined,
+      true // Regenerated perspectives always show base prompt
     );
 
-    const parts: any[] = [
-      { text: prompt },
-      {
+    const parts: any[] = [{ text: prompt }];
+
+    if (perspective !== "left") {
+      parts.push({
         inlineData: {
           mimeType: referenceImage.mimeType,
           data: referenceImage.data,
         },
-      },
-    ];
+      });
+    }
 
-    // Add right view image as additional reference for left view regeneration
-    if (perspective === 'left' && rightViewImage) {
+    // Add right view image as additional reference for front, back, and left view regeneration
+    // Note: We only add the right view, NOT the previous generation of this perspective
+    if (
+      (perspective === "front" ||
+        perspective === "back" ||
+        perspective === "left") &&
+      rightViewImage
+    ) {
       parts.push({
         inlineData: {
           mimeType: rightViewImage.mimeType,
@@ -486,7 +530,7 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
     const contents = [
       {
-        role: 'user',
+        role: "user",
         parts,
       },
     ];
@@ -500,19 +544,26 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
     let generatedImage: GeneratedImage | null = null;
 
     for await (const chunk of response) {
-      if (!chunk.candidates || !chunk.candidates[0].content || !chunk.candidates[0].content.parts) {
+      if (
+        !chunk.candidates ||
+        !chunk.candidates[0].content ||
+        !chunk.candidates[0].content.parts
+      ) {
         continue;
       }
 
       if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-        const fileName = `${analysis.subject.replace(/\s+/g, '_').toLowerCase()}_${perspective}`;
+        const fileName = `${analysis.subject
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${perspective}`;
         const inlineData = chunk.candidates[0].content.parts[0].inlineData;
-        const fileExtension = mime.getExtension(inlineData.mimeType || '') || 'png';
+        const fileExtension =
+          mime.getExtension(inlineData.mimeType || "") || "png";
 
         generatedImage = {
           id: `${fileName}_${Date.now()}`,
-          data: inlineData.data || '',
-          mimeType: inlineData.mimeType || 'image/png',
+          data: inlineData.data || "",
+          mimeType: inlineData.mimeType || "image/png",
           fileName: `${fileName}.${fileExtension}`,
           perspective: perspective,
         };
@@ -526,6 +577,124 @@ ${additionalInstructions ? `Additional style instructions: ${additionalInstructi
 
     if (!generatedImage) {
       throw new Error(`Failed to generate ${perspective} view`);
+    }
+
+    return generatedImage;
+  }
+
+  async editSpecificPerspective(
+    referenceImage: ReferenceImage,
+    perspective: "front" | "right" | "back" | "left",
+    analysis: ImageAnalysis,
+    currentPerspectiveImage: GeneratedImage,
+    editInstructions: string,
+    additionalInstructions?: string,
+    onImageGenerated?: (image: GeneratedImage) => void,
+    onPerspectiveStart?: (perspective: string) => void,
+    rightViewImage?: GeneratedImage
+  ): Promise<GeneratedImage> {
+    const perspectives = this.getPerspectiveViews();
+    const targetPerspective = perspectives.find(
+      (p) => p.perspective === perspective
+    );
+
+    if (!targetPerspective) {
+      throw new Error(`Invalid perspective: ${perspective}`);
+    }
+
+    // Notify that we're starting this perspective
+    if (onPerspectiveStart) {
+      onPerspectiveStart(perspective);
+    }
+
+    const config = {
+      responseModalities: ["IMAGE", "TEXT"],
+    };
+
+    const model = "gemini-2.5-flash-image-preview";
+
+    // Create edit prompt that includes context of current image
+    const editPrompt = `${this.getBasePrompt(additionalInstructions)}
+
+Edit the current ${perspective} view image with these instructions: ${editInstructions}
+
+Maintain the same technical requirements (lighting, background, object consistency) while applying the requested changes.`;
+
+    const parts: any[] = [
+      { text: editPrompt },
+      {
+        inlineData: {
+          mimeType: referenceImage.mimeType,
+          data: referenceImage.data,
+        },
+      },
+      {
+        inlineData: {
+          mimeType: currentPerspectiveImage.mimeType,
+          data: currentPerspectiveImage.data,
+        },
+      },
+    ];
+
+    // Add right view image as additional reference if available and not editing the right view itself
+    if (perspective !== "right" && rightViewImage) {
+      parts.push({
+        inlineData: {
+          mimeType: rightViewImage.mimeType,
+          data: rightViewImage.data,
+        },
+      });
+    }
+
+    const contents = [
+      {
+        role: "user",
+        parts,
+      },
+    ];
+
+    const response = await this.ai.models.generateContentStream({
+      model,
+      config,
+      contents,
+    });
+
+    let generatedImage: GeneratedImage | null = null;
+
+    for await (const chunk of response) {
+      if (
+        !chunk.candidates ||
+        !chunk.candidates[0].content ||
+        !chunk.candidates[0].content.parts
+      ) {
+        continue;
+      }
+
+      if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+        const fileName = `${analysis.subject
+          .replace(/\s+/g, "_")
+          .toLowerCase()}_${perspective}_edited`;
+        const inlineData = chunk.candidates[0].content.parts[0].inlineData;
+        const fileExtension =
+          mime.getExtension(inlineData.mimeType || "") || "png";
+
+        generatedImage = {
+          id: `${fileName}_${Date.now()}`,
+          data: inlineData.data || "",
+          mimeType: inlineData.mimeType || "image/png",
+          fileName: `${fileName}.${fileExtension}`,
+          perspective: perspective,
+        };
+
+        // Call the image callback immediately when the image is generated
+        if (onImageGenerated) {
+          onImageGenerated(generatedImage);
+        }
+      }
+    }
+
+    if (!generatedImage) {
+      throw new Error(`Failed to edit ${perspective} view`);
     }
 
     return generatedImage;

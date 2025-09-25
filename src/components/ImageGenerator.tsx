@@ -9,8 +9,30 @@ import {
 } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { GeminiImageService, type GeneratedImage, type ReferenceImage, type ImageAnalysis } from "@/services/gemini";
-import { Download, Image as ImageIcon, Loader2, Upload, X, RefreshCw, RotateCcw } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  GeminiImageService,
+  type GeneratedImage,
+  type ReferenceImage,
+  type ImageAnalysis,
+} from "@/services/gemini";
+import {
+  Download,
+  Image as ImageIcon,
+  Loader2,
+  Upload,
+  X,
+  RefreshCw,
+  RotateCcw,
+  Edit as EditIcon,
+} from "lucide-react";
 
 interface ImageGeneratorProps {
   apiKey: string;
@@ -23,10 +45,21 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
   const [is3DMode, setIs3DMode] = useState(false);
-  const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(null);
-  const [generatedPrompts, setGeneratedPrompts] = useState<{[key: string]: string}>({});
-  const [currentGeneratingPerspective, setCurrentGeneratingPerspective] = useState<string | null>(null);
-  const [regeneratingPerspective, setRegeneratingPerspective] = useState<string | null>(null);
+  const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(
+    null
+  );
+  const [generatedPrompts, setGeneratedPrompts] = useState<{
+    [key: string]: string;
+  }>({});
+  const [currentGeneratingPerspective, setCurrentGeneratingPerspective] =
+    useState<string | null>(null);
+  const [regeneratingPerspective, setRegeneratingPerspective] = useState<
+    string | null
+  >(null);
+  const [editingPerspective, setEditingPerspective] = useState<string | null>(
+    null
+  );
+  const [editPrompt, setEditPrompt] = useState("");
 
   const geminiService = new GeminiImageService(apiKey);
 
@@ -63,11 +96,13 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
           },
           // Callback for each image as it's generated
           (newImage) => {
-            setGeneratedImages(prev => {
-              const existing = prev.find(img => img.perspective === newImage.perspective);
+            setGeneratedImages((prev) => {
+              const existing = prev.find(
+                (img) => img.perspective === newImage.perspective
+              );
               if (existing) {
                 // Replace existing image for this perspective
-                return prev.map(img =>
+                return prev.map((img) =>
                   img.perspective === newImage.perspective ? newImage : img
                 );
               } else {
@@ -101,7 +136,9 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
     }
   };
 
-  const handleRegenerateSpecificPerspective = async (perspective: 'front' | 'right' | 'back' | 'left') => {
+  const handleRegenerateSpecificPerspective = async (
+    perspective: "front" | "right" | "back" | "left"
+  ) => {
     if (!imageAnalysis || referenceImages.length === 0) {
       setError("Missing image analysis or reference image");
       return;
@@ -109,6 +146,10 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
 
     setRegeneratingPerspective(perspective);
     setError("");
+
+    const rightViewImage = generatedImages.find(
+      (img) => img.perspective === "right"
+    );
 
     try {
       await geminiService.regenerateSpecificPerspective(
@@ -118,8 +159,8 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
         prompt.trim() || undefined,
         // Callback for when image is generated
         (newImage) => {
-          setGeneratedImages(prev => {
-            return prev.map(img =>
+          setGeneratedImages((prev) => {
+            return prev.map((img) =>
               img.perspective === newImage.perspective ? newImage : img
             );
           });
@@ -128,10 +169,68 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
         // Callback for perspective start
         () => {
           // Already handled by setRegeneratingPerspective above
-        }
+        },
+        perspective === "right" ? undefined : rightViewImage // Don't pass right view to itself
       );
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to regenerate perspective");
+      setError(
+        err instanceof Error ? err.message : "Failed to regenerate perspective"
+      );
+      setRegeneratingPerspective(null);
+    }
+  };
+
+  const handleEditSpecificPerspective = async (
+    perspective: "front" | "right" | "back" | "left",
+    editInstructions: string
+  ) => {
+    if (!imageAnalysis || referenceImages.length === 0) {
+      setError("Missing image analysis or reference image");
+      return;
+    }
+
+    const currentImage = generatedImages.find(
+      (img) => img.perspective === perspective
+    );
+    if (!currentImage) {
+      setError("No existing image found for this perspective");
+      return;
+    }
+
+    setRegeneratingPerspective(perspective);
+    setError("");
+
+    const rightViewImage = generatedImages.find(
+      (img) => img.perspective === "right"
+    );
+
+    try {
+      await geminiService.editSpecificPerspective(
+        referenceImages[0],
+        perspective,
+        imageAnalysis,
+        currentImage,
+        editInstructions,
+        prompt.trim() || undefined,
+        // Callback for when image is generated
+        (newImage) => {
+          setGeneratedImages((prev) => {
+            return prev.map((img) =>
+              img.perspective === newImage.perspective ? newImage : img
+            );
+          });
+          setRegeneratingPerspective(null);
+        },
+        // Callback for perspective start
+        () => {
+          // Already handled by setRegeneratingPerspective above
+        },
+        perspective === "right" ? undefined : rightViewImage
+      );
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "Failed to edit perspective"
+      );
       setRegeneratingPerspective(null);
     }
   };
@@ -154,7 +253,9 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
     geminiService.downloadAllImages(generatedImages);
   };
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (!files) return;
 
@@ -163,13 +264,14 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
 
     try {
       for (const file of Array.from(files)) {
-        if (!file.type.startsWith('image/')) {
-          setError('Please upload only image files');
+        if (!file.type.startsWith("image/")) {
+          setError("Please upload only image files");
           return;
         }
 
-        if (file.size > 10 * 1024 * 1024) { // 10MB limit
-          setError('Image files must be smaller than 10MB');
+        if (file.size > 10 * 1024 * 1024) {
+          // 10MB limit
+          setError("Image files must be smaller than 10MB");
           return;
         }
 
@@ -177,14 +279,14 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
         newReferenceImages.push(referenceImage);
       }
 
-      setReferenceImages(prev => [...prev, ...newReferenceImages]);
+      setReferenceImages((prev) => [...prev, ...newReferenceImages]);
     } catch {
-      setError('Failed to process uploaded images');
+      setError("Failed to process uploaded images");
     }
   };
 
   const removeReferenceImage = (index: number) => {
-    setReferenceImages(prev => prev.filter((_, i) => i !== index));
+    setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   return (
@@ -198,8 +300,7 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
           <CardDescription>
             {is3DMode
               ? "Generate 4 orthographic views for 3D asset creation"
-              : "Generate images from text prompts using Google Gemini"
-            }
+              : "Generate images from text prompts using Google Gemini"}
           </CardDescription>
           <div className="flex items-center gap-3 pt-2">
             <Label className="text-sm font-medium">Generation Mode:</Label>
@@ -236,7 +337,8 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="reference-images">
-              Reference Images {is3DMode ? "(required for 3D mode)" : "(optional)"}
+              Reference Images{" "}
+              {is3DMode ? "(required for 3D mode)" : "(optional)"}
             </Label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
               <input
@@ -253,7 +355,9 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
               >
                 <Upload className="w-8 h-8" />
                 <span>Upload reference images</span>
-                <span className="text-xs">Click to browse or drag and drop</span>
+                <span className="text-xs">
+                  Click to browse or drag and drop
+                </span>
               </label>
             </div>
           </div>
@@ -285,14 +389,14 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
             <Label htmlFor="prompt">
               {is3DMode
                 ? "Additional style instructions (optional)"
-                : "Describe the image you want to generate"
-              }
+                : "Describe the image you want to generate"}
             </Label>
             <Textarea
               id="prompt"
-              placeholder={is3DMode
-                ? "Style adjustments: realistic, cartoon style, metallic materials..."
-                : "A futuristic cityscape at sunset with flying cars..."
+              placeholder={
+                is3DMode
+                  ? "Style adjustments: realistic, cartoon style, metallic materials..."
+                  : "A futuristic cityscape at sunset with flying cars..."
               }
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
@@ -308,7 +412,10 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
 
           <Button
             onClick={handleGenerate}
-            disabled={isGenerating || (is3DMode ? referenceImages.length === 0 : !prompt.trim())}
+            disabled={
+              isGenerating ||
+              (is3DMode ? referenceImages.length === 0 : !prompt.trim())
+            }
             className="w-full"
           >
             {isGenerating ? (
@@ -316,12 +423,97 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                 {is3DMode ? "Generating 4 Views..." : "Generating..."}
               </>
+            ) : is3DMode ? (
+              "Generate 4 Perspectives"
             ) : (
-              is3DMode ? "Generate 4 Perspectives" : "Generate Image"
+              "Generate Image"
             )}
           </Button>
         </CardContent>
       </Card>
+
+      {/* Analysis and Prompts Display for 3D Mode */}
+      {is3DMode &&
+        imageAnalysis &&
+        Object.keys(generatedPrompts).length > 0 && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Image Analysis</CardTitle>
+                <CardDescription>
+                  AI analysis of your reference image used for generating
+                  consistent perspectives
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <Label className="font-medium">Subject:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.subject}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Object Type:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.objectType}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Style:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.style}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Lighting:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.lighting}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Materials:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.materials}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Background:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.background}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Generated Prompts</CardTitle>
+                <CardDescription>
+                  The specific prompts used for each perspective to ensure
+                  consistency
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.entries(generatedPrompts).map(
+                    ([perspective, prompt]) => (
+                      <div key={perspective} className="border rounded-lg p-4">
+                        <Label className="font-medium capitalize text-primary">
+                          {perspective} View Prompt:
+                        </Label>
+                        <div className="mt-2 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
+                          {prompt}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
       {generatedImages.length > 0 && (
         <Card>
@@ -332,24 +524,34 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
             <CardDescription>
               {is3DMode
                 ? `4 orthographic views generated for 3D modeling`
-                : `${generatedImages.length} image${generatedImages.length > 1 ? "s" : ""} generated`
-              }
+                : `${generatedImages.length} image${
+                    generatedImages.length > 1 ? "s" : ""
+                  } generated`}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {is3DMode ? (
               <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
-                  {['front', 'right', 'back', 'left'].map((perspective) => {
-                    const image = generatedImages.find(img => img.perspective === perspective);
-                    const isCurrentlyGenerating = currentGeneratingPerspective === perspective;
-                    const isRegenerating = regeneratingPerspective === perspective;
-                    const isProcessing = isCurrentlyGenerating || isRegenerating;
+                  {["front", "right", "back", "left"].map((perspective) => {
+                    const image = generatedImages.find(
+                      (img) => img.perspective === perspective
+                    );
+                    const isCurrentlyGenerating =
+                      currentGeneratingPerspective === perspective;
+                    const isRegenerating =
+                      regeneratingPerspective === perspective;
+                    const isProcessing =
+                      isCurrentlyGenerating || isRegenerating;
                     return (
                       <div key={perspective} className="relative group">
-                        <div className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
-                          isProcessing ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
-                        }`}>
+                        <div
+                          className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
+                            isProcessing
+                              ? "border-blue-400 bg-blue-50"
+                              : "border-gray-200"
+                          }`}
+                        >
                           {image ? (
                             <>
                               <img
@@ -368,7 +570,15 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                                   Download
                                 </Button>
                                 <Button
-                                  onClick={() => handleRegenerateSpecificPerspective(perspective as 'front' | 'right' | 'back' | 'left')}
+                                  onClick={() =>
+                                    handleRegenerateSpecificPerspective(
+                                      perspective as
+                                        | "front"
+                                        | "right"
+                                        | "back"
+                                        | "left"
+                                    )
+                                  }
                                   size="sm"
                                   variant="secondary"
                                   disabled={isGenerating || isRegenerating}
@@ -377,12 +587,27 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                                   <RefreshCw className="w-3 h-3" />
                                   Regenerate
                                 </Button>
+                                <Button
+                                  onClick={() => {
+                                    setEditingPerspective(perspective);
+                                    setEditPrompt("");
+                                  }}
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={isGenerating || isRegenerating}
+                                  className="flex items-center gap-1"
+                                >
+                                  <EditIcon className="w-3 h-3" />
+                                  Edit
+                                </Button>
                               </div>
                               {isRegenerating && (
                                 <div className="absolute inset-0 bg-blue-50/90 flex items-center justify-center">
                                   <div className="flex flex-col items-center gap-2">
                                     <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                    <span className="text-xs text-blue-600">Regenerating...</span>
+                                    <span className="text-xs text-blue-600">
+                                      Regenerating...
+                                    </span>
                                   </div>
                                 </div>
                               )}
@@ -392,7 +617,9 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                               {isCurrentlyGenerating ? (
                                 <div className="flex flex-col items-center gap-2">
                                   <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                  <span className="text-xs text-blue-600">Generating...</span>
+                                  <span className="text-xs text-blue-600">
+                                    Generating...
+                                  </span>
                                 </div>
                               ) : (
                                 <div className="text-xs">Waiting...</div>
@@ -401,9 +628,11 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                           )}
                         </div>
                         <div className="text-center mt-2">
-                          <Label className={`text-sm font-medium capitalize ${
-                            isProcessing ? 'text-blue-600' : ''
-                          }`}>
+                          <Label
+                            className={`text-sm font-medium capitalize ${
+                              isProcessing ? "text-blue-600" : ""
+                            }`}
+                          >
                             {perspective} View
                             {isProcessing && (
                               <span className="ml-1 text-blue-500">●</span>
@@ -429,7 +658,9 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                     <Button
                       onClick={handleRegenerateAll}
                       variant="outline"
-                      disabled={isGenerating || regeneratingPerspective !== null}
+                      disabled={
+                        isGenerating || regeneratingPerspective !== null
+                      }
                       className="flex items-center gap-2"
                     >
                       <RotateCcw className="w-4 h-4" />
@@ -466,70 +697,76 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
         </Card>
       )}
 
-      {/* Analysis and Prompts Display for 3D Mode */}
-      {is3DMode && imageAnalysis && Object.keys(generatedPrompts).length > 0 && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Image Analysis</CardTitle>
-              <CardDescription>
-                AI analysis of your reference image used for generating consistent perspectives
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <Label className="font-medium">Subject:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.subject}</p>
-                </div>
-                <div>
-                  <Label className="font-medium">Object Type:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.objectType}</p>
-                </div>
-                <div>
-                  <Label className="font-medium">Style:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.style}</p>
-                </div>
-                <div>
-                  <Label className="font-medium">Lighting:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.lighting}</p>
-                </div>
-                <div>
-                  <Label className="font-medium">Materials:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.materials}</p>
-                </div>
-                <div>
-                  <Label className="font-medium">Background:</Label>
-                  <p className="text-muted-foreground mt-1">{imageAnalysis.background}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <Dialog
+        open={!!editingPerspective}
+        onOpenChange={(open) => {
+          if (!open) {
+            setEditingPerspective(null);
+            setEditPrompt("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Edit{" "}
+              {editingPerspective
+                ? editingPerspective.charAt(0).toUpperCase() +
+                  editingPerspective.slice(1)
+                : ""}{" "}
+              View
+            </DialogTitle>
+            <DialogDescription>
+              What would you like to change?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="edit-prompt">Modifications</Label>
+              <Textarea
+                id="edit-prompt"
+                placeholder="e.g., Make it brighter, change the color to blue, add more detail..."
+                value={editPrompt}
+                onChange={(e) => setEditPrompt(e.target.value)}
+                rows={3}
+                className="mt-1"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditingPerspective(null);
+                setEditPrompt("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                if (editPrompt.trim()) {
+                  // Close dialog immediately
+                  const perspective = editingPerspective as
+                    | "front"
+                    | "right"
+                    | "back"
+                    | "left";
+                  const prompt = editPrompt.trim();
+                  setEditingPerspective(null);
+                  setEditPrompt("");
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Generated Prompts</CardTitle>
-              <CardDescription>
-                The specific prompts used for each perspective to ensure consistency
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Object.entries(generatedPrompts).map(([perspective, prompt]) => (
-                  <div key={perspective} className="border rounded-lg p-4">
-                    <Label className="font-medium capitalize text-primary">
-                      {perspective} View Prompt:
-                    </Label>
-                    <div className="mt-2 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
-                      {prompt}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+                  // Then handle the edit
+                  await handleEditSpecificPerspective(perspective, prompt);
+                }
+              }}
+              disabled={!editPrompt.trim() || regeneratingPerspective !== null}
+            >
+              Apply Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
