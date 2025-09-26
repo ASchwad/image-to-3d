@@ -1,5 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import mime from "mime";
+import JSZip from "jszip";
 
 export interface GeneratedImage {
   id: string;
@@ -166,7 +167,6 @@ ${
   }
 
   private createPerspectivePrompt(
-    analysis: ImageAnalysis,
     perspective: PerspectiveView,
     additionalInstructions?: string,
     rightViewImage?: GeneratedImage,
@@ -184,7 +184,7 @@ ${
 
     const perspectiveInstruction = `Generate the ${perspective.description} (${perspective.angle}) with standardized soft, even lighting on a pure white background.`;
 
-    return `${basePrompt}${basePrompt ? "\n\n" : ""}${perspectiveInstruction}`;
+    return `${basePrompt} ${perspectiveInstruction}`;
   }
 
   async generate3DPerspectivesWithDetails(
@@ -220,7 +220,6 @@ ${
     // Generate initial prompts (left view prompt will be updated later)
     orderedPerspectives.forEach((perspective, index) => {
       const perspectivePrompt = this.createPerspectivePrompt(
-        analysis,
         perspective,
         additionalInstructions,
         undefined,
@@ -251,7 +250,6 @@ ${
       let currentPrompt = prompts[perspective.perspective];
       if (perspective.perspective === "left" && rightViewImage) {
         currentPrompt = this.createPerspectivePrompt(
-          analysis,
           perspective,
           additionalInstructions,
           rightViewImage,
@@ -431,6 +429,7 @@ ${
   }
 
   downloadImage(image: GeneratedImage): void {
+    console.log("GEMINI Downloading image:", image.fileName);
     const url = this.createImageUrl(image);
     const link = document.createElement("a");
     link.href = url;
@@ -494,7 +493,6 @@ ${
 
     const model = "gemini-2.5-flash-image-preview";
     const prompt = this.createPerspectivePrompt(
-      analysis,
       targetPerspective,
       additionalInstructions,
       perspective === "left" ? rightViewImage : undefined,
@@ -701,12 +699,38 @@ Maintain the same technical requirements (lighting, background, object consisten
   }
 
   async downloadAllImages(images: GeneratedImage[]): Promise<void> {
-    // For now, download each image individually
-    // In a production app, you might want to use a zip library like JSZip
-    images.forEach((image, index) => {
-      setTimeout(() => {
-        this.downloadImage(image);
-      }, index * 200); // Stagger downloads to avoid overwhelming the browser
+    const zip = new JSZip();
+
+    // Add each image to the zip
+    images.forEach((image) => {
+      // Convert base64 to blob for zip
+      const base64Data = image.data;
+      zip.file(image.fileName, base64Data, { base64: true });
     });
+
+    try {
+      // Generate zip file
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+
+      // Create download link for zip file
+      const url = URL.createObjectURL(zipBlob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "generated_images.zip";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // Clean up the URL object
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error creating zip file:", error);
+      // Fallback to individual downloads
+      images.forEach((image, index) => {
+        setTimeout(() => {
+          this.downloadImage(image);
+        }, index * 200);
+      });
+    }
   }
 }

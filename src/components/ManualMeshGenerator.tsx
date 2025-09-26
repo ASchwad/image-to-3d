@@ -11,15 +11,10 @@ import { Label } from "@/components/ui/label";
 import {
   TrellisService,
   type MeshGenerationProgress,
-  type TrellisOutput
+  type TrellisOutput,
 } from "@/services/trellis";
-import {
-  Download,
-  Upload,
-  X,
-  Loader2,
-  Box,
-} from "lucide-react";
+import { Upload, X, Loader2, Box } from "lucide-react";
+import { MeshGenerationResult } from "./MeshGenerationResult";
 
 interface UploadedImage {
   id: string;
@@ -32,17 +27,21 @@ interface ManualMeshGeneratorProps {
   replicateToken: string;
 }
 
-export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps) {
+export function ManualMeshGenerator({
+  replicateToken,
+}: ManualMeshGeneratorProps) {
   const [uploadedImages, setUploadedImages] = useState<UploadedImage[]>([]);
   const [error, setError] = useState<string>("");
   const [meshProgress, setMeshProgress] = useState<MeshGenerationProgress>({
-    status: 'idle'
+    status: "idle",
   });
   const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
 
   const trellisService = new TrellisService(replicateToken);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>
+  ) => {
     const files = event.target.files;
     if (!files) return;
 
@@ -66,9 +65,16 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
           const result = e.target?.result as string;
 
           // Determine next perspective
-          const perspectives: ("front" | "right" | "back" | "left")[] = ["front", "right", "back", "left"];
-          const usedPerspectives = uploadedImages.map(img => img.perspective);
-          const nextPerspective = perspectives.find(p => !usedPerspectives.includes(p));
+          const perspectives: ("front" | "right" | "back" | "left")[] = [
+            "front",
+            "right",
+            "back",
+            "left",
+          ];
+          const usedPerspectives = uploadedImages.map((img) => img.perspective);
+          const nextPerspective = perspectives.find(
+            (p) => !usedPerspectives.includes(p)
+          );
 
           if (!nextPerspective) {
             setError("Maximum 4 images allowed");
@@ -79,10 +85,10 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
             id: Date.now().toString() + Math.random(),
             file,
             dataUri: result,
-            perspective: nextPerspective
+            perspective: nextPerspective,
           };
 
-          setUploadedImages(prev => [...prev, newImage]);
+          setUploadedImages((prev) => [...prev, newImage]);
         };
 
         reader.readAsDataURL(file);
@@ -93,19 +99,28 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
   };
 
   const removeImage = (id: string) => {
-    setUploadedImages(prev => prev.filter(img => img.id !== id));
+    setUploadedImages((prev) => prev.filter((img) => img.id !== id));
   };
 
-  const changePerspective = (id: string, newPerspective: "front" | "right" | "back" | "left") => {
+  const changePerspective = (
+    id: string,
+    newPerspective: "front" | "right" | "back" | "left"
+  ) => {
     // Check if perspective is already used
-    if (uploadedImages.some(img => img.id !== id && img.perspective === newPerspective)) {
+    if (
+      uploadedImages.some(
+        (img) => img.id !== id && img.perspective === newPerspective
+      )
+    ) {
       setError(`${newPerspective} perspective is already assigned`);
       return;
     }
 
     setError("");
-    setUploadedImages(prev =>
-      prev.map(img => img.id === id ? { ...img, perspective: newPerspective } : img)
+    setUploadedImages((prev) =>
+      prev.map((img) =>
+        img.id === id ? { ...img, perspective: newPerspective } : img
+      )
     );
   };
 
@@ -116,11 +131,18 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
     }
 
     // Order images: front, right, back, left (matching the Node.js script pattern)
-    const orderedPerspectives: ("front" | "right" | "back" | "left")[] = ["front", "right", "back", "left"];
+    const orderedPerspectives: ("front" | "right" | "back" | "left")[] = [
+      "front",
+      "right",
+      "back",
+      "left",
+    ];
     const orderedDataUris: string[] = [];
 
     for (const perspective of orderedPerspectives) {
-      const image = uploadedImages.find(img => img.perspective === perspective);
+      const image = uploadedImages.find(
+        (img) => img.perspective === perspective
+      );
       if (image) {
         orderedDataUris.push(image.dataUri);
       }
@@ -139,8 +161,10 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
 
       setMeshResult(result);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to generate 3D mesh");
-      setMeshProgress({ status: 'idle' });
+      setError(
+        err instanceof Error ? err.message : "Failed to generate 3D mesh"
+      );
+      setMeshProgress({ status: "idle" });
     }
   };
 
@@ -159,7 +183,8 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
             Manual Image Upload
           </CardTitle>
           <CardDescription>
-            Upload your own images and generate 3D meshes directly using Trellis API
+            Upload your own images and generate 3D meshes directly using Trellis
+            API
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -194,7 +219,9 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
               <Label>Uploaded Images ({uploadedImages.length}/4)</Label>
               <div className="grid grid-cols-2 gap-4">
                 {["front", "right", "back", "left"].map((perspective) => {
-                  const image = uploadedImages.find(img => img.perspective === perspective);
+                  const image = uploadedImages.find(
+                    (img) => img.perspective === perspective
+                  );
                   return (
                     <div key={perspective} className="space-y-2">
                       <div className="border rounded-lg overflow-hidden aspect-square bg-gray-50">
@@ -232,18 +259,26 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
                         </Label>
                         {image && uploadedImages.length > 1 && (
                           <div className="flex flex-wrap gap-1 mt-1 justify-center">
-                            {(["front", "right", "back", "left"] as const).map((p) => (
-                              <Button
-                                key={p}
-                                size="sm"
-                                variant={p === perspective ? "default" : "outline"}
-                                onClick={() => changePerspective(image.id, p)}
-                                disabled={uploadedImages.some(img => img.id !== image.id && img.perspective === p)}
-                                className="text-xs px-2 py-1 h-auto"
-                              >
-                                {p}
-                              </Button>
-                            ))}
+                            {(["front", "right", "back", "left"] as const).map(
+                              (p) => (
+                                <Button
+                                  key={p}
+                                  size="sm"
+                                  variant={
+                                    p === perspective ? "default" : "outline"
+                                  }
+                                  onClick={() => changePerspective(image.id, p)}
+                                  disabled={uploadedImages.some(
+                                    (img) =>
+                                      img.id !== image.id &&
+                                      img.perspective === p
+                                  )}
+                                  className="text-xs px-2 py-1 h-auto"
+                                >
+                                  {p}
+                                </Button>
+                              )
+                            )}
                           </div>
                         )}
                       </div>
@@ -264,15 +299,16 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
             onClick={handleGenerate3DMesh}
             disabled={
               uploadedImages.length < 3 ||
-              meshProgress.status === 'uploading' ||
-              meshProgress.status === 'generating'
+              meshProgress.status === "uploading" ||
+              meshProgress.status === "generating"
             }
             className="w-full"
           >
-            {meshProgress.status === 'uploading' || meshProgress.status === 'generating' ? (
+            {meshProgress.status === "uploading" ||
+            meshProgress.status === "generating" ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                {meshProgress.message || 'Generating 3D Mesh...'}
+                {meshProgress.message || "Generating 3D Mesh..."}
               </>
             ) : (
               <>
@@ -284,120 +320,11 @@ export function ManualMeshGenerator({ replicateToken }: ManualMeshGeneratorProps
         </CardContent>
       </Card>
 
-      {/* 3D Mesh Generation Progress */}
-      {(meshProgress.status === 'uploading' || meshProgress.status === 'generating' || meshProgress.status === 'error') && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Box className="w-5 h-5" />
-              {meshProgress.status === 'error' ? 'Mesh Generation Failed' : 'Generating 3D Mesh'}
-            </CardTitle>
-            <CardDescription>
-              {meshProgress.message || 'Processing your uploaded images...'}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {meshProgress.status === 'error' ? (
-              <div className="p-4 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-                {meshProgress.error || 'An unknown error occurred'}
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
-                <div className="flex-1">
-                  <div className="text-sm font-medium">{meshProgress.message}</div>
-                  {meshProgress.status === 'generating' && (
-                    <div className="text-xs text-muted-foreground mt-1">
-                      This may take several minutes depending on complexity...
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* 3D Mesh Generation Result */}
-      {meshResult && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Box className="w-5 h-5" />
-              3D Mesh Generated
-            </CardTitle>
-            <CardDescription>
-              Your 3D mesh has been successfully generated from your uploaded images
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {meshResult.model_obj && (
-                <div className="border rounded-lg p-4 text-center">
-                  <h3 className="font-medium mb-2">OBJ Model</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Wavefront OBJ format - Compatible with most 3D software
-                  </p>
-                  <Button
-                    onClick={() => handleDownloadMesh(meshResult.model_obj!, 'obj')}
-                    className="w-full"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download OBJ
-                  </Button>
-                </div>
-              )}
-              {meshResult.model_glb && (
-                <div className="border rounded-lg p-4 text-center">
-                  <h3 className="font-medium mb-2">GLB Model</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    GLTF Binary format - Web and AR/VR ready
-                  </p>
-                  <Button
-                    onClick={() => handleDownloadMesh(meshResult.model_glb!, 'glb')}
-                    className="w-full"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download GLB
-                  </Button>
-                </div>
-              )}
-              {meshResult.model_ply && (
-                <div className="border rounded-lg p-4 text-center">
-                  <h3 className="font-medium mb-2">PLY Model</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Polygon File Format - Research and point clouds
-                  </p>
-                  <Button
-                    onClick={() => handleDownloadMesh(meshResult.model_ply!, 'ply')}
-                    className="w-full"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download PLY
-                  </Button>
-                </div>
-              )}
-            </div>
-            {meshResult.video && (
-              <div className="mt-4">
-                <h3 className="font-medium mb-2">Preview Video</h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <video
-                    src={meshResult.video}
-                    controls
-                    className="w-full max-w-md mx-auto"
-                    autoPlay
-                    loop
-                    muted
-                  >
-                    Your browser does not support video playback.
-                  </video>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      <MeshGenerationResult
+        meshProgress={meshProgress}
+        meshResult={meshResult}
+        trellisService={trellisService}
+      />
     </div>
   );
 }
