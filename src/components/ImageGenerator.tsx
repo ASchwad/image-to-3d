@@ -24,6 +24,11 @@ import {
   type ImageAnalysis,
 } from "@/services/gemini";
 import {
+  TrellisService,
+  type MeshGenerationProgress,
+  type TrellisOutput
+} from "@/services/trellis";
+import {
   Download,
   Image as ImageIcon,
   Loader2,
@@ -32,13 +37,15 @@ import {
   RefreshCw,
   RotateCcw,
   Edit as EditIcon,
+  Box,
 } from "lucide-react";
 
 interface ImageGeneratorProps {
   apiKey: string;
+  replicateToken?: string;
 }
 
-export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
+export function ImageGenerator({ apiKey, replicateToken }: ImageGeneratorProps) {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
@@ -61,7 +68,14 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
   );
   const [editPrompt, setEditPrompt] = useState("");
 
+  // 3D mesh generation states
+  const [meshProgress, setMeshProgress] = useState<MeshGenerationProgress>({
+    status: 'idle'
+  });
+  const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
+
   const geminiService = new GeminiImageService(apiKey);
+  const trellisService = replicateToken ? new TrellisService(replicateToken) : null;
 
   const handleGenerate = async () => {
     if (is3DMode && referenceImages.length === 0) {
@@ -287,6 +301,52 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
 
   const removeReferenceImage = (index: number) => {
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleGenerate3DMesh = async () => {
+    if (!trellisService) {
+      setError("Replicate API token not configured");
+      return;
+    }
+
+    if (generatedImages.length !== 4) {
+      setError("Need all 4 perspective images to generate 3D mesh");
+      return;
+    }
+
+    // Order the images: front, right, back, left
+    const orderedImages = ["front", "right", "back", "left"].map(perspective => {
+      const image = generatedImages.find(img => img.perspective === perspective);
+      if (!image) {
+        throw new Error(`Missing ${perspective} perspective image`);
+      }
+      return image;
+    });
+
+    setError("");
+    setMeshResult(null);
+
+    try {
+      const result = await trellisService.generate3DMesh(
+        orderedImages,
+        (progress) => {
+          setMeshProgress(progress);
+        }
+      );
+
+      setMeshResult(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to generate 3D mesh");
+      setMeshProgress({ status: 'idle' });
+    }
+  };
+
+  const handleDownloadMesh = (url: string, type: string) => {
+    if (!trellisService) return;
+
+    const extension = trellisService.getFileExtension(url);
+    const filename = trellisService.getMeshFileName(imageAnalysis || undefined, extension);
+    trellisService.downloadMeshFile(url, filename);
   };
 
   return (
@@ -646,14 +706,41 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                 {generatedImages.length > 0 && (
                   <div className="flex justify-center gap-2 pt-4">
                     {generatedImages.length === 4 && (
-                      <Button
-                        onClick={handleBatchDownload}
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download All Views
-                      </Button>
+                      <>
+                        <Button
+                          onClick={handleBatchDownload}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download All Views
+                        </Button>
+                        {trellisService && (
+                          <Button
+                            onClick={handleGenerate3DMesh}
+                            variant="default"
+                            disabled={
+                              isGenerating ||
+                              regeneratingPerspective !== null ||
+                              meshProgress.status === 'uploading' ||
+                              meshProgress.status === 'generating'
+                            }
+                            className="flex items-center gap-2"
+                          >
+                            {meshProgress.status === 'uploading' || meshProgress.status === 'generating' ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                {meshProgress.message || 'Generating 3D Mesh...'}
+                              </>
+                            ) : (
+                              <>
+                                <Box className="w-4 h-4" />
+                                Generate 3D Mesh
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </>
                     )}
                     <Button
                       onClick={handleRegenerateAll}
@@ -691,6 +778,164 @@ export function ImageGenerator({ apiKey }: ImageGeneratorProps) {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 3D Mesh Generation Result */}
+      {is3DMode && meshResult && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Box className="w-5 h-5" />
+              3D Mesh Generated
+            </CardTitle>
+            <CardDescription>
+              Your 3D mesh has been successfully generated from the perspective images
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {meshResult.model_glb && (
+                <div className="border rounded-lg p-4 text-center">
+                  <h3 className="font-medium mb-2">GLB Model</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    GLTF Binary format - Web and AR/VR ready
+                  </p>
+                  <Button
+                    onClick={() => handleDownloadMesh(meshResult.model_glb!, 'glb')}
+                    className="w-full"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download GLB
+                  </Button>
+                </div>
+              )}
+              {meshResult.gaussian_ply && (
+                <div className="border rounded-lg p-4 text-center">
+                  <h3 className="font-medium mb-2">Gaussian PLY</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Point cloud format - Gaussian splatting
+                  </p>
+                  <Button
+                    onClick={() => handleDownloadMesh(meshResult.gaussian_ply!, 'ply')}
+                    className="w-full"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download PLY
+                  </Button>
+                </div>
+              )}
+              {(meshResult.model_obj || meshResult.model_file) && (
+                <div className="border rounded-lg p-4 text-center">
+                  <h3 className="font-medium mb-2">3D Model</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    3D model file - Compatible with most software
+                  </p>
+                  <Button
+                    onClick={() => handleDownloadMesh(meshResult.model_obj || meshResult.model_file!, meshResult.model_obj ? 'obj' : 'glb')}
+                    className="w-full"
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Download {meshResult.model_obj ? 'OBJ' : 'Model'}
+                  </Button>
+                </div>
+              )}
+            </div>
+            {(meshResult.video || meshResult.color_video) && (
+              <div className="mt-4">
+                <h3 className="font-medium mb-2">3D Preview Video</h3>
+                <div className="border rounded-lg overflow-hidden">
+                  <video
+                    src={meshResult.color_video || meshResult.video}
+                    controls
+                    className="w-full max-w-md mx-auto"
+                    autoPlay
+                    loop
+                    muted
+                  >
+                    Your browser does not support video playback.
+                  </video>
+                </div>
+                {(meshResult.normal_video || meshResult.combined_video) && (
+                  <div className="flex justify-center gap-2 mt-3">
+                    {meshResult.normal_video && (
+                      <Button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = meshResult.normal_video!;
+                          link.download = 'normal_video.mp4';
+                          link.target = '_blank';
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Download Normal Video
+                      </Button>
+                    )}
+                    {meshResult.combined_video && (
+                      <Button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = meshResult.combined_video!;
+                          link.download = 'combined_video.mp4';
+                          link.target = '_blank';
+                          document.body.appendChild(link);
+                          link.click();
+                          document.body.removeChild(link);
+                        }}
+                        variant="outline"
+                        size="sm"
+                      >
+                        Download Combined Video
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* 3D Mesh Generation Progress */}
+      {is3DMode && (meshProgress.status === 'uploading' || meshProgress.status === 'generating' || meshProgress.status === 'error') && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Box className="w-5 h-5" />
+              {meshProgress.status === 'error' ? 'Mesh Generation Failed' : 'Generating 3D Mesh'}
+            </CardTitle>
+            <CardDescription>
+              {meshProgress.message || 'Processing your perspective images...'}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {meshProgress.status === 'error' ? (
+              <div className="p-4 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
+                {meshProgress.error || 'An unknown error occurred'}
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+                <div className="flex-1">
+                  <div className="text-sm font-medium">{meshProgress.message}</div>
+                  {meshProgress.status === 'uploading' && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      Uploading images to processing server...
+                    </div>
+                  )}
+                  {meshProgress.status === 'generating' && (
+                    <div className="text-xs text-muted-foreground mt-1">
+                      This may take several minutes depending on complexity...
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </CardContent>
