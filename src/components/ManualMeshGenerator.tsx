@@ -125,8 +125,8 @@ export function ManualMeshGenerator({
   };
 
   const handleGenerate3DMesh = async () => {
-    if (uploadedImages.length < 3) {
-      setError("Please upload at least 3 images");
+    if (uploadedImages.length === 0) {
+      setError("Please upload at least 1 image");
       return;
     }
 
@@ -190,7 +190,7 @@ export function ManualMeshGenerator({
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="manual-images">
-              Upload Images (3-4 images recommended)
+              Upload Images (1-4 images, multiple perspectives recommended)
             </Label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
               <input
@@ -298,7 +298,7 @@ export function ManualMeshGenerator({
           <Button
             onClick={handleGenerate3DMesh}
             disabled={
-              uploadedImages.length < 3 ||
+              uploadedImages.length === 0 ||
               meshProgress.status === "uploading" ||
               meshProgress.status === "generating"
             }
