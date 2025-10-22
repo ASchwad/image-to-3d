@@ -353,6 +353,128 @@ ${
     return result.images;
   }
 
+  async generate3DPerspectivesSimple(
+    referenceImage: ReferenceImage,
+    additionalInstructions?: string,
+    onImageGenerated?: (image: GeneratedImage) => void,
+    onPerspectiveStart?: (perspective: string) => void
+  ): Promise<GeneratedImage[]> {
+    const perspectives = this.getPerspectiveViews();
+
+    // Reorder perspectives: right first, then others, left last
+    const orderedPerspectives = [
+      perspectives.find((p) => p.perspective === "right")!,
+      perspectives.find((p) => p.perspective === "front")!,
+      perspectives.find((p) => p.perspective === "back")!,
+      perspectives.find((p) => p.perspective === "left")!,
+    ];
+
+    const allImages: GeneratedImage[] = [];
+    let rightViewImage: GeneratedImage | undefined;
+
+    // Generate each perspective sequentially in the new order
+    for (const perspective of orderedPerspectives) {
+      // Notify that we're starting this perspective
+      if (onPerspectiveStart) {
+        onPerspectiveStart(perspective.perspective);
+      }
+
+      const config = {
+        responseModalities: ["IMAGE", "TEXT"],
+      };
+
+      const model = "gemini-2.5-flash-image-preview";
+
+      // Create prompt for this perspective
+      const currentPrompt = this.createPerspectivePrompt(
+        perspective,
+        additionalInstructions,
+        perspective.perspective === "left" ? rightViewImage : undefined,
+        perspective.perspective === "right" // Only right view gets base prompt
+      );
+
+      const parts: any[] = [
+        { text: currentPrompt },
+        {
+          inlineData: {
+            mimeType: referenceImage.mimeType,
+            data: referenceImage.data,
+          },
+        },
+      ];
+
+      // Add right view image as additional reference for front, back, and left view generation
+      if (
+        (perspective.perspective === "front" ||
+          perspective.perspective === "back" ||
+          perspective.perspective === "left") &&
+        rightViewImage
+      ) {
+        parts.push({
+          inlineData: {
+            mimeType: rightViewImage.mimeType,
+            data: rightViewImage.data,
+          },
+        });
+      }
+
+      const contents = [
+        {
+          role: "user",
+          parts,
+        },
+      ];
+
+      const response = await this.ai.models.generateContentStream({
+        model,
+        config,
+        contents,
+      });
+
+      let imageIndex = 0;
+      for await (const chunk of response) {
+        if (
+          !chunk.candidates ||
+          !chunk.candidates[0].content ||
+          !chunk.candidates[0].content.parts
+        ) {
+          continue;
+        }
+
+        if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
+          const fileName = `perspective_${perspective.perspective}`;
+          const inlineData = chunk.candidates[0].content.parts[0].inlineData;
+          const fileExtension =
+            mime.getExtension(inlineData.mimeType || "") || "png";
+
+          const newImage: GeneratedImage = {
+            id: `${fileName}_${Date.now()}_${imageIndex}`,
+            data: inlineData.data || "",
+            mimeType: inlineData.mimeType || "image/png",
+            fileName: `${fileName}.${fileExtension}`,
+            perspective: perspective.perspective,
+          };
+
+          allImages.push(newImage);
+
+          // Store right view image for later use in left view generation
+          if (perspective.perspective === "right") {
+            rightViewImage = newImage;
+          }
+
+          // Call the image callback immediately when each image is generated
+          if (onImageGenerated) {
+            onImageGenerated(newImage);
+          }
+
+          imageIndex++;
+        }
+      }
+    }
+
+    return allImages;
+  }
+
   async generateImages(
     prompt: string,
     referenceImages?: ReferenceImage[]
@@ -509,7 +631,7 @@ ${
   async regenerateSpecificPerspective(
     referenceImage: ReferenceImage,
     perspective: "front" | "right" | "back" | "left",
-    analysis: ImageAnalysis,
+    analysis?: ImageAnalysis,
     additionalInstructions?: string,
     onImageGenerated?: (image: GeneratedImage) => void,
     onPerspectiveStart?: (perspective: string) => void,
@@ -593,9 +715,9 @@ ${
       }
 
       if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-        const fileName = `${analysis.subject
-          .replace(/\s+/g, "_")
-          .toLowerCase()}_${perspective}`;
+        const fileName = analysis
+          ? `${analysis.subject.replace(/\s+/g, "_").toLowerCase()}_${perspective}`
+          : `perspective_${perspective}`;
         const inlineData = chunk.candidates[0].content.parts[0].inlineData;
         const fileExtension =
           mime.getExtension(inlineData.mimeType || "") || "png";
@@ -625,7 +747,7 @@ ${
   async editSpecificPerspective(
     referenceImage: ReferenceImage,
     perspective: "front" | "right" | "back" | "left",
-    analysis: ImageAnalysis,
+    analysis: ImageAnalysis | undefined,
     currentPerspectiveImage: GeneratedImage,
     editInstructions: string,
     additionalInstructions?: string,
@@ -653,21 +775,11 @@ ${
 
     const model = "gemini-2.5-flash-image-preview";
 
-    // Create edit prompt that includes context of current image
-    const editPrompt = `${this.getBasePrompt(additionalInstructions)}
-
-Edit the current ${perspective} view image with these instructions: ${editInstructions}
-
-Maintain the same technical requirements (lighting, background, object consistency) while applying the requested changes.`;
+    // Simple edit prompt - ONLY use user's instructions
+    const editPrompt = editInstructions;
 
     const parts: any[] = [
       { text: editPrompt },
-      {
-        inlineData: {
-          mimeType: referenceImage.mimeType,
-          data: referenceImage.data,
-        },
-      },
       {
         inlineData: {
           mimeType: currentPerspectiveImage.mimeType,
@@ -675,16 +787,6 @@ Maintain the same technical requirements (lighting, background, object consisten
         },
       },
     ];
-
-    // Add right view image as additional reference if available and not editing the right view itself
-    if (perspective !== "right" && rightViewImage) {
-      parts.push({
-        inlineData: {
-          mimeType: rightViewImage.mimeType,
-          data: rightViewImage.data,
-        },
-      });
-    }
 
     const contents = [
       {
@@ -711,9 +813,9 @@ Maintain the same technical requirements (lighting, background, object consisten
       }
 
       if (chunk.candidates?.[0]?.content?.parts?.[0]?.inlineData) {
-        const fileName = `${analysis.subject
-          .replace(/\s+/g, "_")
-          .toLowerCase()}_${perspective}_edited`;
+        const fileName = analysis
+          ? `${analysis.subject.replace(/\s+/g, "_").toLowerCase()}_${perspective}_edited`
+          : `perspective_${perspective}_edited`;
         const inlineData = chunk.candidates[0].content.parts[0].inlineData;
         const fileExtension =
           mime.getExtension(inlineData.mimeType || "") || "png";

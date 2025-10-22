@@ -21,7 +21,6 @@ import {
   GeminiImageService,
   type GeneratedImage,
   type ReferenceImage,
-  type ImageAnalysis,
 } from "@/services/gemini";
 import { FluxImageService } from "@/services/flux";
 import {
@@ -60,12 +59,6 @@ export function PerspectiveGenerator({
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<ImageModel>("flux");
-  const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(
-    null
-  );
-  const [generatedPrompts, setGeneratedPrompts] = useState<{
-    [key: string]: string;
-  }>({});
   const [currentGeneratingPerspective, setCurrentGeneratingPerspective] =
     useState<string | null>(null);
   const [perspectiveLoadingStates, setPerspectiveLoadingStates] = useState<{
@@ -108,8 +101,6 @@ export function PerspectiveGenerator({
 
     setIsGenerating(true);
     setError("");
-    setImageAnalysis(null);
-    setGeneratedPrompts({});
     setCurrentGeneratingPerspective(null);
     setPerspectiveLoadingStates({
       front: false,
@@ -123,15 +114,11 @@ export function PerspectiveGenerator({
         // Use Flux to generate 4 perspectives
         await generateWithFlux();
       } else {
-        // Use Gemini with detailed analysis
-        const result = await geminiService.generate3DPerspectivesWithDetails(
+        // Use Gemini to generate 4 perspectives
+        await geminiService.generate3DPerspectivesSimple(
           referenceImages[0],
           prompt.trim() || undefined,
-          (analysis, prompts) => {
-            setImageAnalysis(analysis);
-            setGeneratedPrompts(prompts);
-          },
-          (newImage) => {
+          (newImage: GeneratedImage) => {
             setGeneratedImages((prev) => {
               const existing = prev.find(
                 (img) => img.perspective === newImage.perspective
@@ -146,11 +133,10 @@ export function PerspectiveGenerator({
             });
             setCurrentGeneratingPerspective(null);
           },
-          (perspective) => {
+          (perspective: string) => {
             setCurrentGeneratingPerspective(perspective);
           }
         );
-        setGeneratedImages(result.images);
       }
     } catch (err) {
       setError(
@@ -336,15 +322,6 @@ export function PerspectiveGenerator({
         }));
       } else {
         // Regenerate with Gemini
-        if (!imageAnalysis) {
-          setError("Missing image analysis");
-          setPerspectiveLoadingStates((prev) => ({
-            ...prev,
-            [perspective]: false,
-          }));
-          return;
-        }
-
         const rightViewImage = generatedImages.find(
           (img) => img.perspective === "right"
         );
@@ -352,7 +329,7 @@ export function PerspectiveGenerator({
         await geminiService.regenerateSpecificPerspective(
           referenceImages[0],
           perspective,
-          imageAnalysis,
+          undefined,
           prompt.trim() || undefined,
           (newImage) => {
             setGeneratedImages((prev) => {
@@ -444,15 +421,6 @@ export function PerspectiveGenerator({
         }));
       } else {
         // Edit with Gemini
-        if (!imageAnalysis) {
-          setError("Missing image analysis");
-          setPerspectiveLoadingStates((prev) => ({
-            ...prev,
-            [perspective]: false,
-          }));
-          return;
-        }
-
         const rightViewImage = generatedImages.find(
           (img) => img.perspective === "right"
         );
@@ -460,7 +428,7 @@ export function PerspectiveGenerator({
         await geminiService.editSpecificPerspective(
           referenceImages[0],
           perspective,
-          imageAnalysis,
+          undefined,
           currentImage,
           editInstructions,
           prompt.trim() || undefined,
@@ -494,8 +462,6 @@ export function PerspectiveGenerator({
 
   const handleRegenerateAll = () => {
     setGeneratedImages([]);
-    setImageAnalysis(null);
-    setGeneratedPrompts({});
     setCurrentGeneratingPerspective(null);
     setPerspectiveLoadingStates({
       front: false,
@@ -671,85 +637,6 @@ export function PerspectiveGenerator({
         </Card>
 
         {/* Analysis and Prompts Display */}
-        {imageAnalysis && Object.keys(generatedPrompts).length > 0 && (
-          <div className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Image Analysis</CardTitle>
-                <CardDescription>
-                  AI analysis of your reference image used for generating
-                  consistent perspectives
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <Label className="font-medium">Subject:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.subject}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-medium">Object Type:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.objectType}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-medium">Style:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.style}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-medium">Lighting:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.lighting}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-medium">Materials:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.materials}
-                    </p>
-                  </div>
-                  <div>
-                    <Label className="font-medium">Background:</Label>
-                    <p className="text-muted-foreground mt-1">
-                      {imageAnalysis.background}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Generated Prompts</CardTitle>
-                <CardDescription>
-                  The specific prompts used for each perspective to ensure
-                  consistency
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {Object.entries(generatedPrompts).map(
-                    ([perspective, prompt]) => (
-                      <div key={perspective} className="border rounded-lg p-4">
-                        <Label className="font-medium capitalize text-primary">
-                          {perspective} View Prompt:
-                        </Label>
-                        <div className="mt-2 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
-                          {prompt}
-                        </div>
-                      </div>
-                    )
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
 
         {generatedImages.length > 0 && (
           <Card>
@@ -943,7 +830,6 @@ export function PerspectiveGenerator({
           meshProgress={meshProgress}
           meshResult={meshResult}
           trellisService={trellisService}
-          imageAnalysis={imageAnalysis || undefined}
         />
 
         <Dialog
