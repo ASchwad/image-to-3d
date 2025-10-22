@@ -21,7 +21,7 @@ import {
   type TrellisOutput,
   type TrellisInput,
 } from "@/services/trellis";
-import { X, Loader2, Box, Settings } from "lucide-react";
+import { X, Loader2, Box, Settings, Upload } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
 import { ImageUploadDropzone } from "./ImageUploadDropzone";
 
