@@ -12,22 +12,20 @@ import {
   type TrellisOutput,
 } from "@/services/trellis";
 import { Download, Loader2, Box } from "lucide-react";
-import { type ImageAnalysis } from "@/services/gemini";
 import { useState } from "react";
 import { STLViewer } from "./STLViewer";
+import { GLBViewer } from "./GLBViewer";
 
 interface MeshGenerationResultProps {
   meshProgress: MeshGenerationProgress;
   meshResult: TrellisOutput | null;
   trellisService: TrellisService | null;
-  imageAnalysis?: ImageAnalysis;
 }
 
 export function MeshGenerationResult({
   meshProgress,
   meshResult,
   trellisService,
-  imageAnalysis,
 }: MeshGenerationResultProps) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [processedStl, setProcessedStl] = useState<string | null>(null);
@@ -36,9 +34,7 @@ export function MeshGenerationResult({
     if (!trellisService) return;
 
     const extension = trellisService.getFileExtension(url);
-    const filename = imageAnalysis
-      ? trellisService.getMeshFileName(imageAnalysis, extension)
-      : `3d_model.${extension}`;
+    const filename = `3d_model.${extension}`;
     trellisService.downloadMeshFile(url, filename);
   };
 
@@ -72,10 +68,7 @@ export function MeshGenerationResult({
         // Auto-download the processed STL
         const link = document.createElement("a");
         link.href = data.output;
-        const filename = imageAnalysis
-          ? `${imageAnalysis.subject.replace(/\s+/g, "_")}_cleaned.stl`
-          : "3d_model_cleaned.stl";
-        link.download = filename;
+        link.download = "3d_model_cleaned.stl";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
@@ -148,7 +141,7 @@ export function MeshGenerationResult({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {meshResult.model_glb && (
                 <div className="border rounded-lg p-4 text-center">
                   <h3 className="font-medium mb-2">GLB Model</h3>
@@ -191,39 +184,16 @@ export function MeshGenerationResult({
                   </Button>
                 </div>
               )}
-              {meshResult.gaussian_ply && (
-                <div className="border rounded-lg p-4 text-center">
-                  <h3 className="font-medium mb-2">Gaussian PLY</h3>
-                  <p className="text-sm text-muted-foreground mb-3">
-                    Point cloud format - Gaussian splatting
-                  </p>
-                  <Button
-                    onClick={() =>
-                      handleDownloadMesh(meshResult.gaussian_ply!, "ply")
-                    }
-                    className="w-full"
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Download PLY
-                  </Button>
-                </div>
-              )}
             </div>
-            {(meshResult.video || meshResult.color_video) && (
-              <div className="mt-4">
-                <h3 className="font-medium mb-2">3D Preview Video</h3>
-                <div className="border rounded-lg overflow-hidden">
-                  <video
-                    src={meshResult.color_video || meshResult.video}
-                    controls
-                    className="w-full max-w-md mx-auto"
-                    autoPlay
-                    loop
-                    muted
-                  >
-                    Your browser does not support video playback.
-                  </video>
+            {meshResult.model_glb && (
+              <div className="mt-6">
+                <h3 className="font-medium mb-3 text-lg">3D Model Preview</h3>
+                <div className="border rounded-lg overflow-hidden bg-gradient-to-br from-gray-900 to-gray-800">
+                  <GLBViewer glbUrl={meshResult.model_glb} className="w-full" />
                 </div>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  Drag to rotate • Scroll to zoom • Auto-rotates when idle
+                </p>
               </div>
             )}
             {processedStl && (
