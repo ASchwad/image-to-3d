@@ -48,7 +48,9 @@ export function ManualMeshGenerator({
   const [showAdvanced, setShowAdvanced] = useState(false);
 
   // Advanced settings with defaults from server
-  const [advancedSettings, setAdvancedSettings] = useState<Partial<TrellisInput>>({
+  const [advancedSettings, setAdvancedSettings] = useState<
+    Partial<TrellisInput>
+  >({
     texture_size: 2048,
     mesh_simplify: 0.9,
     ss_sampling_steps: 38,
@@ -186,19 +188,13 @@ export function ManualMeshGenerator({
     }
   };
 
-  const handleDownloadMesh = (url: string, type: string) => {
-    const extension = trellisService.getFileExtension(url);
-    const filename = `manual_upload_3d_model.${extension}`;
-    trellisService.downloadMeshFile(url, filename);
-  };
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Manual Image Upload
+            Direct 3D Mesh Generation
           </CardTitle>
           <CardDescription>
             Upload your own images and generate 3D meshes directly using Trellis
@@ -297,7 +293,10 @@ export function ManualMeshGenerator({
 
           <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
             <CollapsibleTrigger asChild>
-              <Button variant="outline" className="w-full flex items-center gap-2">
+              <Button
+                variant="outline"
+                className="w-full flex items-center gap-2"
+              >
                 <Settings className="w-4 h-4" />
                 {showAdvanced ? "Hide" : "Show"} Advanced Settings
               </Button>
@@ -471,7 +470,10 @@ export function ManualMeshGenerator({
                       })
                     }
                   />
-                  <Label htmlFor="return_no_background" className="cursor-pointer">
+                  <Label
+                    htmlFor="return_no_background"
+                    className="cursor-pointer"
+                  >
                     Remove Background
                   </Label>
                 </div>

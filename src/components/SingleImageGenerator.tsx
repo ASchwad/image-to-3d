@@ -17,6 +17,7 @@ import {
 import { FluxImageService } from "@/services/flux";
 import { Download, Image as ImageIcon, Loader2, X } from "lucide-react";
 import { ImageUploadDropzone } from "./ImageUploadDropzone";
+import { ModelSelector } from "./ModelSelector";
 
 type ImageModel = "gemini" | "flux";
 
@@ -27,17 +28,19 @@ interface SingleImageGeneratorProps {
 
 export function SingleImageGenerator({
   apiKey,
-  replicateToken
+  replicateToken,
 }: SingleImageGeneratorProps) {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
-  const [selectedModel, setSelectedModel] = useState<ImageModel>("gemini");
+  const [selectedModel, setSelectedModel] = useState<ImageModel>("flux");
 
   const geminiService = new GeminiImageService(apiKey);
-  const fluxService = replicateToken ? new FluxImageService(replicateToken) : null;
+  const fluxService = replicateToken
+    ? new FluxImageService(replicateToken)
+    : null;
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -58,7 +61,8 @@ export function SingleImageGenerator({
 
       if (selectedModel === "flux" && fluxService) {
         // Flux supports only one reference image
-        const refImage = referenceImages.length > 0 ? referenceImages[0] : undefined;
+        const refImage =
+          referenceImages.length > 0 ? referenceImages[0] : undefined;
         images = await fluxService.generateImages(prompt, refImage);
       } else {
         // Gemini
@@ -103,7 +107,8 @@ export function SingleImageGenerator({
         }
 
         // Use the appropriate service based on selected model
-        const service = selectedModel === "flux" && fluxService ? fluxService : geminiService;
+        const service =
+          selectedModel === "flux" && fluxService ? fluxService : geminiService;
         const referenceImage = await service.fileToReferenceImage(file);
         newReferenceImages.push(referenceImage);
       }
@@ -131,37 +136,17 @@ export function SingleImageGenerator({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="model-select">AI Model</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={selectedModel === "gemini" ? "default" : "outline"}
-                onClick={() => setSelectedModel("gemini")}
-                className="flex-1"
-              >
-                Google Gemini
-              </Button>
-              <Button
-                type="button"
-                variant={selectedModel === "flux" ? "default" : "outline"}
-                onClick={() => setSelectedModel("flux")}
-                disabled={!replicateToken}
-                className="flex-1"
-              >
-                Flux Kontext Pro
-              </Button>
-            </div>
-            {selectedModel === "flux" && !replicateToken && (
-              <p className="text-xs text-muted-foreground">
-                Replicate API token required for Flux model
-              </p>
-            )}
-          </div>
+          <ModelSelector
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            replicateToken={replicateToken}
+          />
 
           <ImageUploadDropzone
             id="reference-images"
-            label={`Reference Images (optional${selectedModel === "flux" ? " - first image only" : ""})`}
+            label={`Reference Images (optional${
+              selectedModel === "flux" ? " - first image only" : ""
+            })`}
             description="PNG, JPG supported"
             multiple={true}
             onFilesSelected={handleFilesSelected}
@@ -174,7 +159,10 @@ export function SingleImageGenerator({
                 {referenceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img
-                      src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createReferenceImageUrl(image)}
+                      src={(selectedModel === "flux" && fluxService
+                        ? fluxService
+                        : geminiService
+                      ).createReferenceImageUrl(image)}
                       alt={`Reference ${index + 1}`}
                       className="w-full h-20 object-cover rounded border"
                     />
@@ -240,7 +228,10 @@ export function SingleImageGenerator({
               {generatedImages.map((image) => (
                 <div key={image.id} className="relative group">
                   <img
-                    src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createImageUrl(image)}
+                    src={(selectedModel === "flux" && fluxService
+                      ? fluxService
+                      : geminiService
+                    ).createImageUrl(image)}
                     alt="Generated image"
                     className="w-full h-64 object-cover rounded-lg border"
                   />

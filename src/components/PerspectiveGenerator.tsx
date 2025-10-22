@@ -42,6 +42,7 @@ import {
 } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
 import { ImageUploadDropzone } from "./ImageUploadDropzone";
+import { ModelSelector } from "./ModelSelector";
 
 type ImageModel = "gemini" | "flux";
 
@@ -59,7 +60,7 @@ export function PerspectiveGenerator({
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
-  const [selectedModel, setSelectedModel] = useState<ImageModel>("gemini");
+  const [selectedModel, setSelectedModel] = useState<ImageModel>("flux");
   const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(
     null
   );
@@ -88,7 +89,9 @@ export function PerspectiveGenerator({
   const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
 
   const geminiService = new GeminiImageService(apiKey);
-  const fluxService = replicateToken ? new FluxImageService(replicateToken) : null;
+  const fluxService = replicateToken
+    ? new FluxImageService(replicateToken)
+    : null;
   const trellisService = replicateToken
     ? new TrellisService(replicateToken)
     : null;
@@ -165,9 +168,15 @@ export function PerspectiveGenerator({
     // Order: right first (like Gemini), then front, back, left
     const perspectives = [
       { name: "right", prompt: "right side view, 90-degree profile" },
-      { name: "front", prompt: "front view, facing camera directly, symmetrical composition" },
+      {
+        name: "front",
+        prompt: "front view, facing camera directly, symmetrical composition",
+      },
       { name: "back", prompt: "back view, rear side visible" },
-      { name: "left", prompt: "left side view, 90-degree profile from the left" },
+      {
+        name: "left",
+        prompt: "left side view, 90-degree profile from the left",
+      },
     ];
 
     let firstGeneratedImage: GeneratedImage | null = null;
@@ -183,7 +192,8 @@ export function PerspectiveGenerator({
 
       if (perspective.name === "left" && frontViewImage) {
         // Special handling for left view - use front view as reference and rotate 90 degrees left
-        fullPrompt = "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
+        fullPrompt =
+          "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
         referenceToUse = {
           data: frontViewImage.data,
           mimeType: frontViewImage.mimeType,
@@ -194,10 +204,15 @@ export function PerspectiveGenerator({
         fullPrompt = `${basePrompt}Generate a ${perspective.prompt} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
 
         // Use original reference for first (right) view, then use the first generated image for others
-        referenceToUse = i === 0 ? referenceImages[0] : (firstGeneratedImage ? {
-          data: firstGeneratedImage.data,
-          mimeType: firstGeneratedImage.mimeType,
-        } as ReferenceImage : referenceImages[0]);
+        referenceToUse =
+          i === 0
+            ? referenceImages[0]
+            : firstGeneratedImage
+            ? ({
+                data: firstGeneratedImage.data,
+                mimeType: firstGeneratedImage.mimeType,
+              } as ReferenceImage)
+            : referenceImages[0];
       }
 
       const images = await fluxService.generateImages(
@@ -275,22 +290,27 @@ export function PerspectiveGenerator({
 
         if (perspective === "left" && frontViewImage) {
           // Special handling for left view - use front view as reference and rotate 90 degrees left
-          fullPrompt = "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
+          fullPrompt =
+            "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
           referenceToUse = {
             data: frontViewImage.data,
             mimeType: frontViewImage.mimeType,
           };
         } else {
           // Include user's base prompt only for the right view
-          const basePrompt = perspective === "right" && prompt.trim() ? `${prompt.trim()}. ` : "";
+          const basePrompt =
+            perspective === "right" && prompt.trim()
+              ? `${prompt.trim()}. `
+              : "";
           fullPrompt = `${basePrompt}Generate a ${perspectivePrompts[perspective]} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
 
-          referenceToUse = perspective === "right" || !rightViewImage
-            ? referenceImages[0]
-            : {
-                data: rightViewImage.data,
-                mimeType: rightViewImage.mimeType,
-              };
+          referenceToUse =
+            perspective === "right" || !rightViewImage
+              ? referenceImages[0]
+              : {
+                  data: rightViewImage.data,
+                  mimeType: rightViewImage.mimeType,
+                };
         }
 
         const images = await fluxService.generateImages(
@@ -518,7 +538,8 @@ export function PerspectiveGenerator({
         }
 
         // Use the appropriate service based on selected model
-        const service = selectedModel === "flux" && fluxService ? fluxService : geminiService;
+        const service =
+          selectedModel === "flux" && fluxService ? fluxService : geminiService;
         const referenceImage = await service.fileToReferenceImage(file);
         newReferenceImages.push(referenceImage);
       }
@@ -589,38 +610,11 @@ export function PerspectiveGenerator({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="model-select">AI Model</Label>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant={selectedModel === "gemini" ? "default" : "outline"}
-                onClick={() => setSelectedModel("gemini")}
-                className="flex-1"
-              >
-                Google Gemini
-              </Button>
-              <Button
-                type="button"
-                variant={selectedModel === "flux" ? "default" : "outline"}
-                onClick={() => setSelectedModel("flux")}
-                disabled={!replicateToken}
-                className="flex-1"
-              >
-                Flux Kontext Pro
-              </Button>
-            </div>
-            {selectedModel === "flux" && !replicateToken && (
-              <p className="text-xs text-muted-foreground">
-                Replicate API token required for Flux model
-              </p>
-            )}
-            {selectedModel === "flux" && (
-              <p className="text-xs text-muted-foreground">
-                Note: Flux generates perspectives sequentially without analysis
-              </p>
-            )}
-          </div>
+          <ModelSelector
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            replicateToken={replicateToken}
+          />
 
           <ImageUploadDropzone
             id="reference-images"
@@ -637,7 +631,10 @@ export function PerspectiveGenerator({
                 {referenceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img
-                      src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createReferenceImageUrl(image)}
+                      src={(selectedModel === "flux" && fluxService
+                        ? fluxService
+                        : geminiService
+                      ).createReferenceImageUrl(image)}
                       alt={`Reference ${index + 1}`}
                       className="w-full h-20 object-cover rounded border"
                     />
@@ -804,7 +801,10 @@ export function PerspectiveGenerator({
                         {image ? (
                           <>
                             <img
-                              src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createImageUrl(image)}
+                              src={(selectedModel === "flux" && fluxService
+                                ? fluxService
+                                : geminiService
+                              ).createImageUrl(image)}
                               alt={`${perspective} view`}
                               className="w-full h-full object-cover"
                             />
