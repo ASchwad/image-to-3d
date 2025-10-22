@@ -10,6 +10,7 @@ import { SingleImageGenerator } from "@/components/SingleImageGenerator";
 import { PerspectiveGenerator } from "@/components/PerspectiveGenerator";
 import { ManualMeshGenerator } from "@/components/ManualMeshGenerator";
 import { AuroraBackground } from "@/components/ui/aurora-background";
+import { EtheralShadow } from "@/components/ui/shadcn-io/etheral-shadow";
 import { Key, Image, Box, Upload } from "lucide-react";
 
 function App() {
@@ -18,13 +19,18 @@ function App() {
 
   if (!apiKey) {
     return (
-      <AuroraBackground>
+      <EtheralShadow
+        color="rgba(255, 140, 60, 0.7)"
+        animation={{ scale: 100, speed: 85 }}
+        noise={{ opacity: 0.6, scale: 1 }}
+        className="min-h-screen"
+      >
         <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
           <header className="text-center space-y-4">
-            <h1 className="text-4xl font-bold text-foreground">
+            <h1 className="text-4xl font-bold text-foreground drop-shadow-lg">
               Image to 3D Generator
             </h1>
-            <p className="text-muted-foreground text-lg">
+            <p className="text-foreground/90 text-lg drop-shadow-md">
               Generate stunning images from text prompts using Google Gemini AI
             </p>
           </header>
@@ -79,20 +85,25 @@ function App() {
             </CardContent>
           </Card>
         </div>
-      </AuroraBackground>
+      </EtheralShadow>
     );
   }
 
   return (
-    <AuroraBackground>
+    <EtheralShadow
+      color="rgba(255, 140, 60, 0.7)"
+      animation={{ scale: 100, speed: 85 }}
+      noise={{ opacity: 0.6, scale: 1 }}
+      className="min-h-screen"
+    >
       <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
         <header className="text-center space-y-4">
-          <h1 className="text-4xl font-bold text-foreground">Maggio 🧑🏼‍🎨</h1>
-          <p className="text-muted-foreground text-lg mb-0">
+          <h1 className="text-4xl font-bold text-foreground drop-shadow-lg">Maggio 🧑🏼‍🎨</h1>
+          <p className="text-foreground/90 text-lg mb-0 drop-shadow-md">
             Generate/edit images and bring them to the 3D world with cutting
             edge AI
           </p>
-          <p className="text-muted-foreground text-sm mt-0">
+          <p className="text-foreground/70 text-sm mt-0 drop-shadow-md">
             Powered by Google Nano Banana and Microsoft Trellis
           </p>
         </header>
@@ -169,7 +180,7 @@ function App() {
           </TabsContent>
         </Tabs>
       </div>
-    </AuroraBackground>
+    </EtheralShadow>
   );
 }
 
