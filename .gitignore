@@ -27,7 +27,6 @@ Thumbs.db
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
-.idea/
 
 # GLB files (except test fixtures)
 *.glb
