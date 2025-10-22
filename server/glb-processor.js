@@ -4,6 +4,16 @@ import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js';
 import fs from 'fs';
 import path from 'path';
 
+// Polyfill browser globals for Three.js in Node.js
+global.self = global;
+global.window = global;
+global.document = {
+  createElement: () => ({
+    getContext: () => null,
+    style: {},
+  }),
+};
+
 /**
  * Process a GLB file: smooth the mesh and optionally add a foundation
  * @param {string} inputPath - Path to input GLB file
@@ -23,13 +33,19 @@ export async function processGLB(inputPath, outputPath, options = {}) {
 
   console.log(`🔧 Processing GLB: ${inputPath}`);
 
-  // Load the GLB file
+  // Load the GLB file from disk
+  const glbData = fs.readFileSync(inputPath);
+  const arrayBuffer = glbData.buffer.slice(
+    glbData.byteOffset,
+    glbData.byteOffset + glbData.byteLength
+  );
+
   const loader = new GLTFLoader();
   const gltf = await new Promise((resolve, reject) => {
-    loader.load(
-      inputPath,
+    loader.parse(
+      arrayBuffer,
+      '', // path (not needed for parse)
       (gltf) => resolve(gltf),
-      undefined,
       (error) => reject(error)
     );
   });
@@ -50,107 +66,108 @@ export async function processGLB(inputPath, outputPath, options = {}) {
 
   console.log(`✓ Found ${meshes.length} mesh(es)`);
 
-  // Process each mesh: smooth and merge
-  const processedGeometries = [];
+  // Create a new scene with only the meshes (no other nodes)
+  const exportScene = new THREE.Scene();
 
   for (const mesh of meshes) {
+    mesh.updateMatrixWorld(true);
+
     let geometry = mesh.geometry.clone();
 
-    // Ensure we have a BufferGeometry
-    if (!geometry.isBufferGeometry) {
-      geometry = new THREE.BufferGeometry().fromGeometry(geometry);
-    }
-
-    // Apply mesh transformations
-    mesh.updateMatrixWorld(true);
+    // Apply world transforms to bake them into the geometry
     geometry.applyMatrix4(mesh.matrixWorld);
 
-    // Smooth the mesh by computing vertex normals
-    // First merge vertices to ensure proper smoothing
-    geometry = mergeVertices(geometry);
-    geometry.computeVertexNormals();
+    // Check if geometry is indexed and has interleaved attributes (this causes corruption)
+    const hasInterleavedAttributes = Object.values(geometry.attributes).some(
+      attr => attr.isInterleavedBufferAttribute
+    );
 
-    processedGeometries.push(geometry);
-    console.log(`✓ Processed mesh with ${geometry.attributes.position.count} vertices`);
-  }
+    console.log(`✓ Processing mesh: ${geometry.attributes.position.count} vertices`);
+    console.log(`  Indexed: ${!!geometry.index}`);
+    console.log(`  Interleaved: ${hasInterleavedAttributes}`);
 
-  // Merge all geometries into one
-  let finalGeometry;
-  if (processedGeometries.length === 1) {
-    finalGeometry = processedGeometries[0];
-  } else {
-    const mergedGeometry = new THREE.BufferGeometry();
-    const positions = [];
-    const normals = [];
-
-    for (const geo of processedGeometries) {
-      const pos = geo.attributes.position.array;
-      const norm = geo.attributes.normal.array;
-      positions.push(...pos);
-      normals.push(...norm);
+    // If indexed but NOT interleaved, convert to non-indexed for STL
+    // If interleaved, keep as-is and let STLExporter handle it
+    if (geometry.index && !hasInterleavedAttributes) {
+      geometry = geometry.toNonIndexed();
+      console.log('  ✓ Converted to non-indexed');
     }
 
-    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-    mergedGeometry.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3));
-    finalGeometry = mergedGeometry;
-  }
+    // Ensure normals exist
+    if (!geometry.attributes.normal) {
+      geometry.computeVertexNormals();
+      console.log('  ✓ Computed normals');
+    }
 
-  console.log('✓ Meshes merged');
-
-  // Add foundation if requested
-  if (addFoundation) {
-    finalGeometry = addCircularFoundation(finalGeometry, marginRatio, thicknessRatio);
-    console.log('✓ Foundation added');
+    // Create a new mesh with the processed geometry
+    const exportMesh = new THREE.Mesh(geometry);
+    exportScene.add(exportMesh);
   }
 
   // Export to STL
   const exporter = new STLExporter();
-  const stlString = exporter.parse(new THREE.Mesh(finalGeometry), { binary: true });
+  const stlString = exporter.parse(exportScene, { binary: false });
 
   // Write to file
-  fs.writeFileSync(outputPath, Buffer.from(stlString));
+  fs.writeFileSync(outputPath, stlString);
   console.log(`✅ STL saved: ${outputPath}`);
 }
 
 /**
- * Merge vertices that are at the same position
- * This is necessary for proper smooth shading
+ * Auto-orient the geometry to stand upright
+ * Tries to find the best "up" direction by testing which rotation
+ * produces the smallest base footprint (tallest/thinnest orientation)
  */
-function mergeVertices(geometry, tolerance = 1e-4) {
-  const positions = geometry.attributes.position.array;
-  const vertexCount = positions.length / 3;
+function autoOrient(geometry) {
+  // Test 6 possible orientations (±X, ±Y, ±Z pointing up)
+  const orientations = [
+    { name: 'Y up (original)', matrix: new THREE.Matrix4() },
+    { name: 'Y down (flip)', matrix: new THREE.Matrix4().makeRotationZ(Math.PI) },
+    { name: 'X up', matrix: new THREE.Matrix4().makeRotationZ(-Math.PI / 2) },
+    { name: 'X down', matrix: new THREE.Matrix4().makeRotationZ(Math.PI / 2) },
+    { name: 'Z up', matrix: new THREE.Matrix4().makeRotationX(Math.PI / 2) },
+    { name: 'Z down', matrix: new THREE.Matrix4().makeRotationX(-Math.PI / 2) }
+  ];
 
-  // Simple vertex merging - map unique positions
-  const uniqueVertices = new Map();
-  const newIndices = new Uint32Array(vertexCount);
-  const newPositions = [];
-  const newNormals = [];
+  let bestOrientation = null;
+  let bestScore = -Infinity;
 
-  let uniqueIndex = 0;
+  for (const orientation of orientations) {
+    const testGeometry = geometry.clone();
+    testGeometry.applyMatrix4(orientation.matrix);
+    testGeometry.computeBoundingBox();
 
-  for (let i = 0; i < vertexCount; i++) {
-    const x = positions[i * 3];
-    const y = positions[i * 3 + 1];
-    const z = positions[i * 3 + 2];
+    const bbox = testGeometry.boundingBox;
+    const sizeX = bbox.max.x - bbox.min.x;
+    const sizeY = bbox.max.y - bbox.min.y;
+    const sizeZ = bbox.max.z - bbox.min.z;
 
-    // Create a key for this vertex position
-    const key = `${Math.round(x / tolerance)},${Math.round(y / tolerance)},${Math.round(z / tolerance)}`;
+    // Score = height / base_area (we want TALL and THIN - objects should stand up)
+    const baseArea = sizeX * sizeZ;
+    const score = sizeY / baseArea;
 
-    if (!uniqueVertices.has(key)) {
-      uniqueVertices.set(key, uniqueIndex);
-      newPositions.push(x, y, z);
-      newIndices[i] = uniqueIndex;
-      uniqueIndex++;
-    } else {
-      newIndices[i] = uniqueVertices.get(key);
+    console.log(`  ${orientation.name}: ${sizeX.toFixed(2)}×${sizeY.toFixed(2)}×${sizeZ.toFixed(2)}, score=${score.toFixed(3)}`);
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestOrientation = orientation;
     }
   }
 
-  const newGeometry = new THREE.BufferGeometry();
-  newGeometry.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
-  newGeometry.setIndex(Array.from(newIndices));
+  console.log(`✓ Best orientation: ${bestOrientation.name}`);
+  geometry.applyMatrix4(bestOrientation.matrix);
 
-  return newGeometry;
+  // Center the model on the XZ plane and place on ground (Y=0)
+  geometry.computeBoundingBox();
+  const newBbox = geometry.boundingBox;
+  const centerX = (newBbox.max.x + newBbox.min.x) / 2;
+  const centerZ = (newBbox.max.z + newBbox.min.z) / 2;
+  const minY = newBbox.min.y;
+
+  geometry.translate(-centerX, -minY, -centerZ);
+  console.log('✓ Centered and placed on ground');
+
+  return geometry;
 }
 
 /**
@@ -189,20 +206,40 @@ function addCircularFoundation(geometry, marginRatio, thicknessRatio) {
   // Position the foundation
   foundationGeometry.translate(centerX, bottomY - thickness / 2, centerZ);
 
+  // Convert both geometries to non-indexed (required for STL)
+  const origGeometry = geometry.index ? geometry.toNonIndexed() : geometry;
+  const foundGeometry = foundationGeometry.index ? foundationGeometry.toNonIndexed() : foundationGeometry;
+
   // Merge the foundation with the original geometry
   const mergedGeometry = new THREE.BufferGeometry();
   const positions = [];
   const normals = [];
 
   // Add original geometry
-  const origPos = geometry.attributes.position.array;
-  const origNorm = geometry.attributes.normal?.array;
+  const origPos = origGeometry.attributes.position.array;
+  const origNorm = origGeometry.attributes.normal?.array;
   positions.push(...origPos);
-  if (origNorm) normals.push(...origNorm);
+  if (origNorm) {
+    normals.push(...origNorm);
+  } else {
+    // Generate flat normals if missing
+    for (let i = 0; i < origPos.length; i += 9) {
+      const v1 = new THREE.Vector3(origPos[i], origPos[i+1], origPos[i+2]);
+      const v2 = new THREE.Vector3(origPos[i+3], origPos[i+4], origPos[i+5]);
+      const v3 = new THREE.Vector3(origPos[i+6], origPos[i+7], origPos[i+8]);
+      const normal = new THREE.Vector3().crossVectors(
+        new THREE.Vector3().subVectors(v2, v1),
+        new THREE.Vector3().subVectors(v3, v1)
+      ).normalize();
+      normals.push(normal.x, normal.y, normal.z);
+      normals.push(normal.x, normal.y, normal.z);
+      normals.push(normal.x, normal.y, normal.z);
+    }
+  }
 
   // Add foundation geometry
-  const foundPos = foundationGeometry.attributes.position.array;
-  const foundNorm = foundationGeometry.attributes.normal.array;
+  const foundPos = foundGeometry.attributes.position.array;
+  const foundNorm = foundGeometry.attributes.normal.array;
   positions.push(...foundPos);
   normals.push(...foundNorm);
 

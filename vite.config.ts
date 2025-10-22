@@ -11,4 +11,10 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    watch: {
+      // Ignore backend server files to prevent frontend rerenders
+      ignored: ['**/server/**', '**/node_modules/**']
+    }
+  }
 })

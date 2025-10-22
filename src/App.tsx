@@ -137,6 +137,10 @@ function App() {
                 path="/generate-3d-asset"
                 element={<Generate3DAssetPage replicateToken={replicateToken} />}
               />
+              <Route
+                path="/veloce"
+                element={<Generate3DAssetPage replicateToken={replicateToken} />}
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </EtheralShadow>

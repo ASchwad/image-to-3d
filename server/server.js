@@ -189,12 +189,12 @@ app.post('/api/process-glb', async (req, res) => {
       const outputBuffer = fs.readFileSync(outputPath);
       const outputBase64 = `data:application/octet-stream;base64,${outputBuffer.toString('base64')}`;
 
-      // Clean up temp files
+      // Clean up only the input GLB file, keep the STL
       try {
         fs.unlinkSync(inputPath);
-        fs.unlinkSync(outputPath);
+        console.log(`📁 Kept STL file: ${outputPath}`);
       } catch (cleanupError) {
-        console.warn('⚠️  Failed to clean up temp files:', cleanupError);
+        console.warn('⚠️  Failed to clean up input file:', cleanupError);
       }
 
       console.log('✅ GLB processing completed successfully');
@@ -207,12 +207,11 @@ app.post('/api/process-glb', async (req, res) => {
       });
 
     } catch (processingError) {
-      // Clean up temp files on error
+      // Clean up only the input file on error, keep failed STL for debugging
       try {
         if (fs.existsSync(inputPath)) fs.unlinkSync(inputPath);
-        if (fs.existsSync(outputPath)) fs.unlinkSync(outputPath);
       } catch (cleanupError) {
-        console.warn('⚠️  Failed to clean up temp files:', cleanupError);
+        console.warn('⚠️  Failed to clean up input file:', cleanupError);
       }
       throw processingError;
     }

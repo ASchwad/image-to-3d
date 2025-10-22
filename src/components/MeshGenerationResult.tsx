@@ -11,7 +11,7 @@ import {
   type MeshGenerationProgress,
   type TrellisOutput,
 } from "@/services/trellis";
-import { Download, Loader2, Box, Sparkles } from "lucide-react";
+import { Download, Loader2, Box } from "lucide-react";
 import { type ImageAnalysis } from "@/services/gemini";
 import { useState } from "react";
 import { STLViewer } from "./STLViewer";
@@ -168,9 +168,9 @@ export function MeshGenerationResult({
               )}
               {meshResult.model_glb && (
                 <div className="border rounded-lg p-4 text-center">
-                  <h3 className="font-medium mb-2">Cleaned STL</h3>
+                  <h3 className="font-medium mb-2">STL Format</h3>
                   <p className="text-sm text-muted-foreground mb-3">
-                    Smoothed mesh with foundation - 3D printing ready
+                    Cleaned mesh - 3D printing ready
                   </p>
                   <Button
                     onClick={handleCleanupAndDownload}
@@ -180,12 +180,12 @@ export function MeshGenerationResult({
                     {isProcessing ? (
                       <>
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Processing...
+                        Converting...
                       </>
                     ) : (
                       <>
-                        <Sparkles className="w-4 h-4 mr-2" />
-                        Clean & Download STL
+                        <Download className="w-4 h-4 mr-2" />
+                        Download STL
                       </>
                     )}
                   </Button>
