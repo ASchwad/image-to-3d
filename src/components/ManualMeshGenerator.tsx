@@ -8,13 +8,22 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   TrellisService,
   type MeshGenerationProgress,
   type TrellisOutput,
+  type TrellisInput,
 } from "@/services/trellis";
-import { Upload, X, Loader2, Box } from "lucide-react";
+import { Loader2, Box, Settings, Upload } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
+import { ImageUploadDropzone } from "./ImageUploadDropzone";
 
 interface UploadedImage {
   id: string;
@@ -36,15 +45,25 @@ export function ManualMeshGenerator({
     status: "idle",
   });
   const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // Advanced settings with defaults from server
+  const [advancedSettings, setAdvancedSettings] = useState<
+    Partial<TrellisInput>
+  >({
+    texture_size: 2048,
+    mesh_simplify: 0.9,
+    ss_sampling_steps: 38,
+    slat_sampling_steps: 12,
+    ss_guidance_strength: 7.5,
+    slat_guidance_strength: 3,
+    generate_normal: false,
+    return_no_background: false,
+  });
 
   const trellisService = new TrellisService(replicateToken);
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files) return;
-
+  const handleFilesSelected = async (files: FileList) => {
     setError("");
 
     try {
@@ -125,8 +144,8 @@ export function ManualMeshGenerator({
   };
 
   const handleGenerate3DMesh = async () => {
-    if (uploadedImages.length < 3) {
-      setError("Please upload at least 3 images");
+    if (uploadedImages.length === 0) {
+      setError("Please upload at least 1 image");
       return;
     }
 
@@ -156,7 +175,8 @@ export function ManualMeshGenerator({
         orderedDataUris,
         (progress) => {
           setMeshProgress(progress);
-        }
+        },
+        advancedSettings
       );
 
       setMeshResult(result);
@@ -168,19 +188,14 @@ export function ManualMeshGenerator({
     }
   };
 
-  const handleDownloadMesh = (url: string, type: string) => {
-    const extension = trellisService.getFileExtension(url);
-    const filename = `manual_upload_3d_model.${extension}`;
-    trellisService.downloadMeshFile(url, filename);
-  };
-
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="flex items-center justify-center min-h-screen p-8">
+      <div className="max-w-4xl w-full space-y-6 z-10">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
-            Manual Image Upload
+            Direct 3D Mesh Generation
           </CardTitle>
           <CardDescription>
             Upload your own images and generate 3D meshes directly using Trellis
@@ -188,106 +203,67 @@ export function ManualMeshGenerator({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="manual-images">
-              Upload Images (3-4 images recommended)
-            </Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <input
-                id="manual-images"
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <label
-                htmlFor="manual-images"
-                className="cursor-pointer flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Upload className="w-8 h-8" />
-                <span>Upload perspective images</span>
-                <span className="text-xs">
-                  Click to browse or drag and drop • PNG, JPG supported
-                </span>
-              </label>
-            </div>
-          </div>
+          <ImageUploadDropzone
+            id="manual-images"
+            label={`Upload Images (${uploadedImages.length}/4 - multiple perspectives recommended)`}
+            description="Upload perspective images • PNG, JPG supported"
+            multiple={true}
+            onFilesSelected={handleFilesSelected}
+            images={uploadedImages.map((img) => ({
+              id: img.id,
+              url: img.dataUri,
+            }))}
+            onRemoveImage={(id) => removeImage(id as string)}
+            renderImageOverlay={(image, onPreview) => {
+              const uploadedImage = uploadedImages.find(
+                (img) => img.id === image.id
+              );
+              if (!uploadedImage) return null;
 
-          {uploadedImages.length > 0 && (
-            <div className="space-y-4">
-              <Label>Uploaded Images ({uploadedImages.length}/4)</Label>
-              <div className="grid grid-cols-2 gap-4">
-                {["front", "right", "back", "left"].map((perspective) => {
-                  const image = uploadedImages.find(
-                    (img) => img.perspective === perspective
-                  );
-                  return (
-                    <div key={perspective} className="space-y-2">
-                      <div className="border rounded-lg overflow-hidden aspect-square bg-gray-50">
-                        {image ? (
-                          <div className="relative group h-full">
-                            <img
-                              src={image.dataUri}
-                              alt={`${perspective} view`}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button
-                                onClick={() => removeImage(image.id)}
-                                size="sm"
-                                variant="destructive"
-                                className="flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" />
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-gray-400">
-                            <div className="text-center">
-                              <Upload className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                              <div className="text-xs">No image</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <Label className="text-sm font-medium capitalize">
-                          {perspective} View
-                        </Label>
-                        {image && uploadedImages.length > 1 && (
-                          <div className="flex flex-wrap gap-1 mt-1 justify-center">
-                            {(["front", "right", "back", "left"] as const).map(
-                              (p) => (
-                                <Button
-                                  key={p}
-                                  size="sm"
-                                  variant={
-                                    p === perspective ? "default" : "outline"
-                                  }
-                                  onClick={() => changePerspective(image.id, p)}
-                                  disabled={uploadedImages.some(
-                                    (img) =>
-                                      img.id !== image.id &&
-                                      img.perspective === p
-                                  )}
-                                  className="text-xs px-2 py-1 h-auto"
-                                >
-                                  {p}
-                                </Button>
-                              )
-                            )}
-                          </div>
+              return (
+                <div className="absolute inset-0">
+                  <div
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={onPreview}
+                  />
+                  <div className="absolute top-1 left-1 bg-black/70 text-white px-2 py-0.5 rounded text-xs font-medium capitalize z-10">
+                    {uploadedImage.perspective}
+                  </div>
+                  {uploadedImages.length > 1 && (
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                      <div className="flex flex-col gap-1">
+                        {(["front", "right", "back", "left"] as const).map(
+                          (p) => (
+                            <Button
+                              key={p}
+                              size="sm"
+                              variant={
+                                p === uploadedImage.perspective
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changePerspective(uploadedImage.id, p);
+                              }}
+                              disabled={uploadedImages.some(
+                                (img) =>
+                                  img.id !== uploadedImage.id &&
+                                  img.perspective === p
+                              )}
+                              className="text-xs px-2 py-1 h-auto"
+                            >
+                              {p}
+                            </Button>
+                          )
                         )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  )}
+                </div>
+              );
+            }}
+          />
 
           {error && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
@@ -295,10 +271,220 @@ export function ManualMeshGenerator({
             </div>
           )}
 
+          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+            <CollapsibleTrigger asChild>
+              <Button
+                variant="outline"
+                className="w-full flex items-center gap-2"
+              >
+                <Settings className="w-4 h-4" />
+                {showAdvanced ? "Hide" : "Show"} Advanced Settings
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="space-y-4 mt-4 p-4 border rounded-lg">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="texture_size">
+                    Texture Size
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Higher = better quality
+                    </span>
+                  </Label>
+                  <Input
+                    id="texture_size"
+                    type="number"
+                    min="512"
+                    max="8192"
+                    step="512"
+                    value={advancedSettings.texture_size}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        texture_size: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="mesh_simplify">
+                    Mesh Simplify
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Lower = more detail
+                    </span>
+                  </Label>
+                  <Input
+                    id="mesh_simplify"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.05"
+                    value={advancedSettings.mesh_simplify}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        mesh_simplify: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ss_sampling_steps">
+                    Sparse Structure Steps
+                    <span className="text-xs text-muted-foreground ml-2">
+                      More = better quality
+                    </span>
+                  </Label>
+                  <Input
+                    id="ss_sampling_steps"
+                    type="number"
+                    min="10"
+                    max="100"
+                    step="1"
+                    value={advancedSettings.ss_sampling_steps}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        ss_sampling_steps: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="slat_sampling_steps">
+                    SLAT Sampling Steps
+                    <span className="text-xs text-muted-foreground ml-2">
+                      More = finer details
+                    </span>
+                  </Label>
+                  <Input
+                    id="slat_sampling_steps"
+                    type="number"
+                    min="5"
+                    max="50"
+                    step="1"
+                    value={advancedSettings.slat_sampling_steps}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        slat_sampling_steps: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="ss_guidance_strength">
+                    SS Guidance Strength
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Image adherence
+                    </span>
+                  </Label>
+                  <Input
+                    id="ss_guidance_strength"
+                    type="number"
+                    min="0"
+                    max="20"
+                    step="0.5"
+                    value={advancedSettings.ss_guidance_strength}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        ss_guidance_strength: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="slat_guidance_strength">
+                    SLAT Guidance Strength
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Detail preservation
+                    </span>
+                  </Label>
+                  <Input
+                    id="slat_guidance_strength"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.5"
+                    value={advancedSettings.slat_guidance_strength}
+                    onChange={(e) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        slat_guidance_strength: Number(e.target.value),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 pt-2">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="generate_normal"
+                    checked={advancedSettings.generate_normal}
+                    onCheckedChange={(checked: boolean) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        generate_normal: checked,
+                      })
+                    }
+                  />
+                  <Label htmlFor="generate_normal" className="cursor-pointer">
+                    Generate Normal Maps
+                  </Label>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="return_no_background"
+                    checked={advancedSettings.return_no_background}
+                    onCheckedChange={(checked: boolean) =>
+                      setAdvancedSettings({
+                        ...advancedSettings,
+                        return_no_background: checked,
+                      })
+                    }
+                  />
+                  <Label
+                    htmlFor="return_no_background"
+                    className="cursor-pointer"
+                  >
+                    Remove Background
+                  </Label>
+                </div>
+              </div>
+
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() =>
+                  setAdvancedSettings({
+                    texture_size: 2048,
+                    mesh_simplify: 0.9,
+                    ss_sampling_steps: 38,
+                    slat_sampling_steps: 12,
+                    ss_guidance_strength: 7.5,
+                    slat_guidance_strength: 3,
+                    generate_normal: false,
+                    return_no_background: false,
+                  })
+                }
+                className="w-full"
+              >
+                Reset to Defaults
+              </Button>
+            </CollapsibleContent>
+          </Collapsible>
+
           <Button
             onClick={handleGenerate3DMesh}
             disabled={
-              uploadedImages.length < 3 ||
+              uploadedImages.length === 0 ||
               meshProgress.status === "uploading" ||
               meshProgress.status === "generating"
             }
@@ -325,6 +511,7 @@ export function ManualMeshGenerator({
         meshResult={meshResult}
         trellisService={trellisService}
       />
+      </div>
     </div>
   );
 }
