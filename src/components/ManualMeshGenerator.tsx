@@ -21,7 +21,7 @@ import {
   type TrellisOutput,
   type TrellisInput,
 } from "@/services/trellis";
-import { X, Loader2, Box, Settings, Upload } from "lucide-react";
+import { Loader2, Box, Settings, Upload } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
 import { ImageUploadDropzone } from "./ImageUploadDropzone";
 
@@ -204,86 +204,65 @@ export function ManualMeshGenerator({
         <CardContent className="space-y-4">
           <ImageUploadDropzone
             id="manual-images"
-            label="Upload Images (1-4 images, multiple perspectives recommended)"
+            label={`Upload Images (${uploadedImages.length}/4 - multiple perspectives recommended)`}
             description="Upload perspective images • PNG, JPG supported"
             multiple={true}
             onFilesSelected={handleFilesSelected}
-          />
+            images={uploadedImages.map((img) => ({
+              id: img.id,
+              url: img.dataUri,
+            }))}
+            onRemoveImage={(id) => removeImage(id as string)}
+            renderImageOverlay={(image, onPreview) => {
+              const uploadedImage = uploadedImages.find(
+                (img) => img.id === image.id
+              );
+              if (!uploadedImage) return null;
 
-          {uploadedImages.length > 0 && (
-            <div className="space-y-4">
-              <Label>Uploaded Images ({uploadedImages.length}/4)</Label>
-              <div className="grid grid-cols-2 gap-4">
-                {["front", "right", "back", "left"].map((perspective) => {
-                  const image = uploadedImages.find(
-                    (img) => img.perspective === perspective
-                  );
-                  return (
-                    <div key={perspective} className="space-y-2">
-                      <div className="border rounded-lg overflow-hidden aspect-square bg-gray-50">
-                        {image ? (
-                          <div className="relative group h-full">
-                            <img
-                              src={image.dataUri}
-                              alt={`${perspective} view`}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                              <Button
-                                onClick={() => removeImage(image.id)}
-                                size="sm"
-                                variant="destructive"
-                                className="flex items-center gap-1"
-                              >
-                                <X className="w-3 h-3" />
-                                Remove
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="h-full flex items-center justify-center text-gray-400">
-                            <div className="text-center">
-                              <Upload className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                              <div className="text-xs">No image</div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center">
-                        <Label className="text-sm font-medium capitalize">
-                          {perspective} View
-                        </Label>
-                        {image && uploadedImages.length > 1 && (
-                          <div className="flex flex-wrap gap-1 mt-1 justify-center">
-                            {(["front", "right", "back", "left"] as const).map(
-                              (p) => (
-                                <Button
-                                  key={p}
-                                  size="sm"
-                                  variant={
-                                    p === perspective ? "default" : "outline"
-                                  }
-                                  onClick={() => changePerspective(image.id, p)}
-                                  disabled={uploadedImages.some(
-                                    (img) =>
-                                      img.id !== image.id &&
-                                      img.perspective === p
-                                  )}
-                                  className="text-xs px-2 py-1 h-auto"
-                                >
-                                  {p}
-                                </Button>
-                              )
-                            )}
-                          </div>
+              return (
+                <div className="absolute inset-0">
+                  <div
+                    className="absolute inset-0 cursor-pointer"
+                    onClick={onPreview}
+                  />
+                  <div className="absolute top-1 left-1 bg-black/70 text-white px-2 py-0.5 rounded text-xs font-medium capitalize z-10">
+                    {uploadedImage.perspective}
+                  </div>
+                  {uploadedImages.length > 1 && (
+                    <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center z-10">
+                      <div className="flex flex-col gap-1">
+                        {(["front", "right", "back", "left"] as const).map(
+                          (p) => (
+                            <Button
+                              key={p}
+                              size="sm"
+                              variant={
+                                p === uploadedImage.perspective
+                                  ? "default"
+                                  : "outline"
+                              }
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                changePerspective(uploadedImage.id, p);
+                              }}
+                              disabled={uploadedImages.some(
+                                (img) =>
+                                  img.id !== uploadedImage.id &&
+                                  img.perspective === p
+                              )}
+                              className="text-xs px-2 py-1 h-auto"
+                            >
+                              {p}
+                            </Button>
+                          )
                         )}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                  )}
+                </div>
+              );
+            }}
+          />
 
           {error && (
             <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">

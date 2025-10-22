@@ -34,7 +34,6 @@ import {
   Image as ImageIcon,
   Loader2,
   Upload,
-  X,
   RefreshCw,
   RotateCcw,
   Edit as EditIcon,
@@ -622,33 +621,15 @@ export function PerspectiveGenerator({
             description="PNG, JPG supported"
             multiple={true}
             onFilesSelected={handleFilesSelected}
+            images={referenceImages.map((image, index) => ({
+              id: index,
+              url: (selectedModel === "flux" && fluxService
+                ? fluxService
+                : geminiService
+              ).createReferenceImageUrl(image),
+            }))}
+            onRemoveImage={(id) => removeReferenceImage(id as number)}
           />
-
-          {referenceImages.length > 0 && (
-            <div className="space-y-2">
-              <Label>Reference Images</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                {referenceImages.map((image, index) => (
-                  <div key={index} className="relative group">
-                    <img
-                      src={(selectedModel === "flux" && fluxService
-                        ? fluxService
-                        : geminiService
-                      ).createReferenceImageUrl(image)}
-                      alt={`Reference ${index + 1}`}
-                      className="w-full h-20 object-cover rounded border"
-                    />
-                    <button
-                      onClick={() => removeReferenceImage(index)}
-                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           <div className="space-y-2">
             <Label htmlFor="prompt">
