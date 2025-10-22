@@ -11,8 +11,10 @@ import {
   type MeshGenerationProgress,
   type TrellisOutput,
 } from "@/services/trellis";
-import { Download, Loader2, Box } from "lucide-react";
+import { Download, Loader2, Box, Sparkles } from "lucide-react";
 import { type ImageAnalysis } from "@/services/gemini";
+import { useState } from "react";
+import { STLViewer } from "./STLViewer";
 
 interface MeshGenerationResultProps {
   meshProgress: MeshGenerationProgress;
@@ -27,6 +29,9 @@ export function MeshGenerationResult({
   trellisService,
   imageAnalysis,
 }: MeshGenerationResultProps) {
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processedStl, setProcessedStl] = useState<string | null>(null);
+
   const handleDownloadMesh = (url: string, type: string) => {
     if (!trellisService) return;
 
@@ -35,6 +40,52 @@ export function MeshGenerationResult({
       ? trellisService.getMeshFileName(imageAnalysis, extension)
       : `3d_model.${extension}`;
     trellisService.downloadMeshFile(url, filename);
+  };
+
+  const handleCleanupAndDownload = async () => {
+    if (!meshResult?.model_glb) return;
+
+    setIsProcessing(true);
+    try {
+      const response = await fetch("http://localhost:3001/api/process-glb", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          glbUrl: meshResult.model_glb,
+          marginRatio: 0.1,
+          thicknessRatio: 0.05,
+          outputFormat: "stl",
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to process GLB");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.output) {
+        setProcessedStl(data.output);
+
+        // Auto-download the processed STL
+        const link = document.createElement("a");
+        link.href = data.output;
+        const filename = imageAnalysis
+          ? `${imageAnalysis.subject.replace(/\s+/g, "_")}_cleaned.stl`
+          : "3d_model_cleaned.stl";
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error("Error processing GLB:", error);
+      alert("Failed to process and clean the mesh. Please try again.");
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -115,6 +166,31 @@ export function MeshGenerationResult({
                   </Button>
                 </div>
               )}
+              {meshResult.model_glb && (
+                <div className="border rounded-lg p-4 text-center">
+                  <h3 className="font-medium mb-2">Cleaned STL</h3>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Smoothed mesh with foundation - 3D printing ready
+                  </p>
+                  <Button
+                    onClick={handleCleanupAndDownload}
+                    className="w-full"
+                    disabled={isProcessing}
+                  >
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 mr-2" />
+                        Clean & Download STL
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
               {meshResult.gaussian_ply && (
                 <div className="border rounded-lg p-4 text-center">
                   <h3 className="font-medium mb-2">Gaussian PLY</h3>
@@ -148,6 +224,17 @@ export function MeshGenerationResult({
                     Your browser does not support video playback.
                   </video>
                 </div>
+              </div>
+            )}
+            {processedStl && (
+              <div className="mt-4">
+                <h3 className="font-medium mb-2">Cleaned STL Preview</h3>
+                <div className="border rounded-lg overflow-hidden bg-gray-50">
+                  <STLViewer stlUrl={processedStl} className="w-full" />
+                </div>
+                <p className="text-xs text-muted-foreground mt-2 text-center">
+                  Use mouse to rotate, scroll to zoom
+                </p>
               </div>
             )}
           </CardContent>

@@ -2,13 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import Replicate from 'replicate';
-import { exec } from 'child_process';
-import { promisify } from 'util';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import { processGLB } from './glb-processor.js';
 
-const execAsync = promisify(exec);
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -174,18 +172,13 @@ app.post('/api/process-glb', async (req, res) => {
         fs.writeFileSync(inputPath, Buffer.from(base64Data, 'base64'));
       }
 
-      // Run the Blender processing script
-      const scriptPath = path.join(__dirname, '../blender-scripts/process_with_foundation.py');
-      const command = `python3 "${scriptPath}" "${inputPath}" "${outputPath}" ${marginRatio} ${thicknessRatio}`;
-
-      console.log(`🎨 Running Blender processing: ${command}`);
-      const { stdout, stderr } = await execAsync(command, {
-        timeout: 300000, // 5 minute timeout
-        maxBuffer: 50 * 1024 * 1024 // 50MB buffer
+      // Run the Node.js GLB processing script
+      console.log(`🎨 Processing GLB with Node.js...`);
+      await processGLB(inputPath, outputPath, {
+        marginRatio: parseFloat(marginRatio),
+        thicknessRatio: parseFloat(thicknessRatio),
+        addFoundation: true
       });
-
-      if (stdout) console.log('📝 Output:', stdout);
-      if (stderr) console.log('⚠️  Stderr:', stderr);
 
       // Check if output file was created
       if (!fs.existsSync(outputPath)) {
