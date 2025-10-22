@@ -9,6 +9,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { SingleImageGenerator } from "@/components/SingleImageGenerator";
 import { PerspectiveGenerator } from "@/components/PerspectiveGenerator";
 import { ManualMeshGenerator } from "@/components/ManualMeshGenerator";
+import { AuroraBackground } from "@/components/ui/aurora-background";
 import { Key, Image, Box, Upload } from "lucide-react";
 
 function App() {
@@ -17,8 +18,8 @@ function App() {
 
   if (!apiKey) {
     return (
-      <div className="min-h-screen bg-background p-8">
-        <div className="max-w-4xl mx-auto space-y-8">
+      <AuroraBackground>
+        <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
           <header className="text-center space-y-4">
             <h1 className="text-4xl font-bold text-foreground">
               Image to 3D Generator
@@ -78,13 +79,13 @@ function App() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </AuroraBackground>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background p-8">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <AuroraBackground>
+      <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
         <header className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-foreground">Maggio 🧑🏼‍🎨</h1>
           <p className="text-muted-foreground text-lg mb-0">
@@ -168,7 +169,7 @@ function App() {
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AuroraBackground>
   );
 }
 
