@@ -11,6 +11,7 @@ import { PerspectiveGenerator } from "@/components/PerspectiveGenerator";
 import { ManualMeshGenerator } from "@/components/ManualMeshGenerator";
 import { AuroraBackground } from "@/components/ui/aurora-background";
 import { EtheralShadow } from "@/components/ui/shadcn-io/etheral-shadow";
+import { Toaster } from "@/components/ui/sonner";
 import { Key, Image, Box, Upload } from "lucide-react";
 
 function App() {
@@ -90,13 +91,15 @@ function App() {
   }
 
   return (
-    <EtheralShadow
-      color="rgba(255, 140, 60, 0.7)"
-      animation={{ scale: 100, speed: 85 }}
-      noise={{ opacity: 0.6, scale: 1 }}
-      className="min-h-screen"
-    >
-      <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
+    <>
+      <Toaster />
+      <EtheralShadow
+        color="rgba(255, 140, 60, 0.7)"
+        animation={{ scale: 100, speed: 85 }}
+        noise={{ opacity: 0.6, scale: 1 }}
+        className="min-h-screen"
+      >
+        <div className="max-w-4xl mx-auto space-y-8 p-8 z-10">
         <header className="text-center space-y-4">
           <h1 className="text-4xl font-bold text-foreground drop-shadow-lg">Maggio 🧑🏼‍🎨</h1>
           <p className="text-foreground/90 text-lg mb-0 drop-shadow-md">
@@ -181,6 +184,7 @@ function App() {
         </Tabs>
       </div>
     </EtheralShadow>
+    </>
   );
 }
 
