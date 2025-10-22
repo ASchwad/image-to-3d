@@ -116,7 +116,7 @@ function App() {
           </TabsList>
 
           <TabsContent value="single" className="mt-6">
-            <SingleImageGenerator apiKey={apiKey} />
+            <SingleImageGenerator apiKey={apiKey} replicateToken={replicateToken} />
           </TabsContent>
 
           <TabsContent value="perspective" className="mt-6">

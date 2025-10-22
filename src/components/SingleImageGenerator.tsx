@@ -14,20 +14,29 @@ import {
   type GeneratedImage,
   type ReferenceImage,
 } from "@/services/gemini";
+import { FluxImageService } from "@/services/flux";
 import { Download, Image as ImageIcon, Loader2, Upload, X } from "lucide-react";
+
+type ImageModel = "gemini" | "flux";
 
 interface SingleImageGeneratorProps {
   apiKey: string;
+  replicateToken?: string;
 }
 
-export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
+export function SingleImageGenerator({
+  apiKey,
+  replicateToken
+}: SingleImageGeneratorProps) {
   const [prompt, setPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<ImageModel>("gemini");
 
   const geminiService = new GeminiImageService(apiKey);
+  const fluxService = replicateToken ? new FluxImageService(replicateToken) : null;
 
   const handleGenerate = async () => {
     if (!prompt.trim()) {
@@ -35,14 +44,29 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
       return;
     }
 
+    if (selectedModel === "flux" && !fluxService) {
+      setError("Replicate API token is required for Flux model");
+      return;
+    }
+
     setIsGenerating(true);
     setError("");
 
     try {
-      const images = await geminiService.generateImages(
-        prompt,
-        referenceImages.length > 0 ? referenceImages : undefined
-      );
+      let images: GeneratedImage[];
+
+      if (selectedModel === "flux" && fluxService) {
+        // Flux supports only one reference image
+        const refImage = referenceImages.length > 0 ? referenceImages[0] : undefined;
+        images = await fluxService.generateImages(prompt, refImage);
+      } else {
+        // Gemini
+        images = await geminiService.generateImages(
+          prompt,
+          referenceImages.length > 0 ? referenceImages : undefined
+        );
+      }
+
       setGeneratedImages(images);
     } catch (err) {
       setError(
@@ -54,7 +78,11 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
   };
 
   const handleDownload = (image: GeneratedImage) => {
-    geminiService.downloadImage(image);
+    if (selectedModel === "flux" && fluxService) {
+      fluxService.downloadImage(image);
+    } else {
+      geminiService.downloadImage(image);
+    }
   };
 
   const handleFileUpload = async (
@@ -78,7 +106,9 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
           return;
         }
 
-        const referenceImage = await geminiService.fileToReferenceImage(file);
+        // Use the appropriate service based on selected model
+        const service = selectedModel === "flux" && fluxService ? fluxService : geminiService;
+        const referenceImage = await service.fileToReferenceImage(file);
         newReferenceImages.push(referenceImage);
       }
 
@@ -101,13 +131,41 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
             Single Image: Create and Edit
           </CardTitle>
           <CardDescription>
-            Generate images from text prompts using Google Gemini AI
+            Generate images from text prompts using AI models
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="model-select">AI Model</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={selectedModel === "gemini" ? "default" : "outline"}
+                onClick={() => setSelectedModel("gemini")}
+                className="flex-1"
+              >
+                Google Gemini
+              </Button>
+              <Button
+                type="button"
+                variant={selectedModel === "flux" ? "default" : "outline"}
+                onClick={() => setSelectedModel("flux")}
+                disabled={!replicateToken}
+                className="flex-1"
+              >
+                Flux Kontext Pro
+              </Button>
+            </div>
+            {selectedModel === "flux" && !replicateToken && (
+              <p className="text-xs text-muted-foreground">
+                Replicate API token required for Flux model
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="reference-images">
-              Reference Images (optional)
+              Reference Images (optional{selectedModel === "flux" ? " - first image only" : ""})
             </Label>
             <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
               <input
@@ -138,7 +196,7 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
                 {referenceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img
-                      src={geminiService.createReferenceImageUrl(image)}
+                      src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createReferenceImageUrl(image)}
                       alt={`Reference ${index + 1}`}
                       className="w-full h-20 object-cover rounded border"
                     />
@@ -204,7 +262,7 @@ export function SingleImageGenerator({ apiKey }: SingleImageGeneratorProps) {
               {generatedImages.map((image) => (
                 <div key={image.id} className="relative group">
                   <img
-                    src={geminiService.createImageUrl(image)}
+                    src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createImageUrl(image)}
                     alt="Generated image"
                     className="w-full h-64 object-cover rounded-lg border"
                   />

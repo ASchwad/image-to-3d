@@ -441,20 +441,62 @@ ${
 
   async fileToReferenceImage(file: File): Promise<ReferenceImage> {
     return new Promise((resolve, reject) => {
+      const img = new Image();
       const reader = new FileReader();
+
       reader.onload = (e) => {
         const result = e.target?.result as string;
-        if (result) {
-          // Remove the data URL prefix (data:image/png;base64,)
-          const base64Data = result.split(",")[1];
-          resolve({
-            data: base64Data,
-            mimeType: file.type,
-          });
-        } else {
+        if (!result) {
           reject(new Error("Failed to read file"));
+          return;
         }
+
+        img.onload = () => {
+          // Create a canvas to properly handle EXIF orientation
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          if (!ctx) {
+            reject(new Error("Failed to create canvas context"));
+            return;
+          }
+
+          // Set canvas size to match image
+          canvas.width = img.width;
+          canvas.height = img.height;
+
+          // Draw the image (this respects EXIF orientation in modern browsers)
+          ctx.drawImage(img, 0, 0);
+
+          // Convert canvas to base64 without EXIF data
+          canvas.toBlob((blob) => {
+            if (!blob) {
+              reject(new Error("Failed to convert image"));
+              return;
+            }
+
+            const blobReader = new FileReader();
+            blobReader.onload = (blobEvent) => {
+              const blobResult = blobEvent.target?.result as string;
+              if (blobResult) {
+                const base64Data = blobResult.split(",")[1];
+                resolve({
+                  data: base64Data,
+                  mimeType: blob.type,
+                });
+              } else {
+                reject(new Error("Failed to read blob"));
+              }
+            };
+            blobReader.onerror = () => reject(new Error("Failed to read blob"));
+            blobReader.readAsDataURL(blob);
+          }, file.type || 'image/png');
+        };
+
+        img.onerror = () => reject(new Error("Failed to load image"));
+        img.src = result;
       };
+
       reader.onerror = () => reject(new Error("Failed to read file"));
       reader.readAsDataURL(file);
     });

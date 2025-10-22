@@ -128,6 +128,81 @@ app.get('/api/prediction/:id', async (req, res) => {
   }
 });
 
+// Generate image with Flux Kontext Pro
+app.post('/api/generate-flux-image', async (req, res) => {
+  try {
+    const { prompt, image, aspect_ratio = '1:1', output_format = 'png' } = req.body;
+
+    if (!prompt) {
+      return res.status(400).json({ error: 'Prompt is required' });
+    }
+
+    console.log(`🎨 Starting Flux image generation with prompt: "${prompt.substring(0, 50)}..."`);
+
+    const input = {
+      prompt,
+      aspect_ratio,
+      output_format,
+      prompt_upsampling: false,
+    };
+
+    // Add input_image if provided (for editing mode)
+    // Note: parameter is called "input_image" not "image"
+    if (image) {
+      input.input_image = image;
+      console.log('🖼️ Reference image provided for editing');
+    }
+
+    console.log('📤 Creating Flux prediction via Replicate...');
+
+    // Use predictions.create instead of run to properly wait for completion
+    const prediction = await replicate.predictions.create({
+      model: "black-forest-labs/flux-kontext-pro",
+      input: input,
+    });
+
+    console.log('📋 Prediction created:', prediction.id);
+    console.log('⏳ Waiting for completion...');
+
+    // Poll for completion
+    let finalPrediction = prediction;
+    while (
+      finalPrediction.status !== 'succeeded' &&
+      finalPrediction.status !== 'failed' &&
+      finalPrediction.status !== 'canceled'
+    ) {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      finalPrediction = await replicate.predictions.get(prediction.id);
+      console.log('📊 Status:', finalPrediction.status);
+    }
+
+    if (finalPrediction.status === 'failed') {
+      throw new Error(finalPrediction.error || 'Prediction failed');
+    }
+
+    if (finalPrediction.status === 'canceled') {
+      throw new Error('Prediction was canceled');
+    }
+
+    console.log('✅ Flux generation completed');
+    console.log('📦 Output type:', typeof finalPrediction.output);
+    console.log('📦 Output value:', finalPrediction.output);
+
+    // Return the output URL
+    res.json({
+      success: true,
+      output: finalPrediction.output
+    });
+
+  } catch (error) {
+    console.error('❌ Flux generation failed:', error);
+    res.status(500).json({
+      error: 'Failed to generate image with Flux',
+      details: error.message
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`🌟 Trellis API Server running on http://localhost:${port}`);
   console.log(`📡 Ready to accept requests from http://localhost:5173`);

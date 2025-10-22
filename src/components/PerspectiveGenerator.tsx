@@ -23,6 +23,7 @@ import {
   type ReferenceImage,
   type ImageAnalysis,
 } from "@/services/gemini";
+import { FluxImageService } from "@/services/flux";
 import {
   TrellisService,
   type MeshGenerationProgress,
@@ -41,6 +42,8 @@ import {
 } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
 
+type ImageModel = "gemini" | "flux";
+
 interface PerspectiveGeneratorProps {
   apiKey: string;
   replicateToken?: string;
@@ -55,6 +58,7 @@ export function PerspectiveGenerator({
   const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
+  const [selectedModel, setSelectedModel] = useState<ImageModel>("gemini");
   const [imageAnalysis, setImageAnalysis] = useState<ImageAnalysis | null>(
     null
   );
@@ -83,6 +87,7 @@ export function PerspectiveGenerator({
   const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
 
   const geminiService = new GeminiImageService(apiKey);
+  const fluxService = replicateToken ? new FluxImageService(replicateToken) : null;
   const trellisService = replicateToken
     ? new TrellisService(replicateToken)
     : null;
@@ -90,6 +95,11 @@ export function PerspectiveGenerator({
   const handleGenerate = async () => {
     if (referenceImages.length === 0) {
       setError("Please upload a reference image for 4-perspective generation");
+      return;
+    }
+
+    if (selectedModel === "flux" && !fluxService) {
+      setError("Replicate API token is required for Flux model");
       return;
     }
 
@@ -106,33 +116,39 @@ export function PerspectiveGenerator({
     });
 
     try {
-      const result = await geminiService.generate3DPerspectivesWithDetails(
-        referenceImages[0],
-        prompt.trim() || undefined,
-        (analysis, prompts) => {
-          setImageAnalysis(analysis);
-          setGeneratedPrompts(prompts);
-        },
-        (newImage) => {
-          setGeneratedImages((prev) => {
-            const existing = prev.find(
-              (img) => img.perspective === newImage.perspective
-            );
-            if (existing) {
-              return prev.map((img) =>
-                img.perspective === newImage.perspective ? newImage : img
+      if (selectedModel === "flux" && fluxService) {
+        // Use Flux to generate 4 perspectives
+        await generateWithFlux();
+      } else {
+        // Use Gemini with detailed analysis
+        const result = await geminiService.generate3DPerspectivesWithDetails(
+          referenceImages[0],
+          prompt.trim() || undefined,
+          (analysis, prompts) => {
+            setImageAnalysis(analysis);
+            setGeneratedPrompts(prompts);
+          },
+          (newImage) => {
+            setGeneratedImages((prev) => {
+              const existing = prev.find(
+                (img) => img.perspective === newImage.perspective
               );
-            } else {
-              return [...prev, newImage];
-            }
-          });
-          setCurrentGeneratingPerspective(null);
-        },
-        (perspective) => {
-          setCurrentGeneratingPerspective(perspective);
-        }
-      );
-      setGeneratedImages(result.images);
+              if (existing) {
+                return prev.map((img) =>
+                  img.perspective === newImage.perspective ? newImage : img
+                );
+              } else {
+                return [...prev, newImage];
+              }
+            });
+            setCurrentGeneratingPerspective(null);
+          },
+          (perspective) => {
+            setCurrentGeneratingPerspective(perspective);
+          }
+        );
+        setGeneratedImages(result.images);
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to generate 4 perspectives"
@@ -142,43 +158,199 @@ export function PerspectiveGenerator({
     }
   };
 
+  const generateWithFlux = async () => {
+    if (!fluxService) return;
+
+    // Order: right first (like Gemini), then front, back, left
+    const perspectives = [
+      { name: "right", prompt: "right side view, 90-degree profile" },
+      { name: "front", prompt: "front view, facing camera directly, symmetrical composition" },
+      { name: "back", prompt: "back view, rear side visible" },
+      { name: "left", prompt: "left side view, 90-degree profile from the left" },
+    ];
+
+    let firstGeneratedImage: GeneratedImage | null = null;
+    let frontViewImage: GeneratedImage | null = null;
+
+    for (let i = 0; i < perspectives.length; i++) {
+      const perspective = perspectives[i];
+      setCurrentGeneratingPerspective(perspective.name);
+
+      // Build the prompt
+      let fullPrompt: string;
+      let referenceToUse: ReferenceImage;
+
+      if (perspective.name === "left" && frontViewImage) {
+        // Special handling for left view - use front view as reference and rotate 90 degrees left
+        fullPrompt = "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
+        referenceToUse = {
+          data: frontViewImage.data,
+          mimeType: frontViewImage.mimeType,
+        };
+      } else {
+        // Include user's base prompt only for the first (right) view
+        const basePrompt = i === 0 && prompt.trim() ? `${prompt.trim()}. ` : "";
+        fullPrompt = `${basePrompt}Generate a ${perspective.prompt} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
+
+        // Use original reference for first (right) view, then use the first generated image for others
+        referenceToUse = i === 0 ? referenceImages[0] : (firstGeneratedImage ? {
+          data: firstGeneratedImage.data,
+          mimeType: firstGeneratedImage.mimeType,
+        } as ReferenceImage : referenceImages[0]);
+      }
+
+      const images = await fluxService.generateImages(
+        fullPrompt,
+        referenceToUse
+      );
+
+      if (images.length > 0) {
+        const image = {
+          ...images[0],
+          perspective: perspective.name as "front" | "right" | "back" | "left",
+        };
+
+        // Store first generated image (right view) to use as reference for others
+        if (i === 0) {
+          firstGeneratedImage = image;
+        }
+        // Store front view for left view generation
+        if (perspective.name === "front") {
+          frontViewImage = image;
+        }
+
+        setGeneratedImages((prev) => {
+          const existing = prev.find(
+            (img) => img.perspective === perspective.name
+          );
+          if (existing) {
+            return prev.map((img) =>
+              img.perspective === perspective.name ? image : img
+            );
+          } else {
+            return [...prev, image];
+          }
+        });
+      }
+    }
+
+    setCurrentGeneratingPerspective(null);
+  };
+
   const handleRegenerateSpecificPerspective = async (
     perspective: "front" | "right" | "back" | "left"
   ) => {
-    if (!imageAnalysis || referenceImages.length === 0) {
-      setError("Missing image analysis or reference image");
+    if (referenceImages.length === 0) {
+      setError("Missing reference image");
       return;
     }
 
     setPerspectiveLoadingStates((prev) => ({ ...prev, [perspective]: true }));
     setError("");
 
-    const rightViewImage = generatedImages.find(
-      (img) => img.perspective === "right"
-    );
-
     try {
-      await geminiService.regenerateSpecificPerspective(
-        referenceImages[0],
-        perspective,
-        imageAnalysis,
-        prompt.trim() || undefined,
-        (newImage) => {
+      if (selectedModel === "flux" && fluxService) {
+        // Regenerate with Flux
+        const perspectivePrompts: { [key: string]: string } = {
+          front: "front view, facing camera directly, symmetrical composition",
+          right: "right side view, 90-degree profile",
+          back: "back view, rear side visible",
+          left: "left side view, 90-degree profile from the left",
+        };
+
+        // Use right view as reference for front, back
+        // Use front view as reference for left view
+        // Use original reference for right view
+        const rightViewImage = generatedImages.find(
+          (img) => img.perspective === "right"
+        );
+        const frontViewImage = generatedImages.find(
+          (img) => img.perspective === "front"
+        );
+
+        // Build the prompt
+        let fullPrompt: string;
+        let referenceToUse: ReferenceImage;
+
+        if (perspective === "left" && frontViewImage) {
+          // Special handling for left view - use front view as reference and rotate 90 degrees left
+          fullPrompt = "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
+          referenceToUse = {
+            data: frontViewImage.data,
+            mimeType: frontViewImage.mimeType,
+          };
+        } else {
+          // Include user's base prompt only for the right view
+          const basePrompt = perspective === "right" && prompt.trim() ? `${prompt.trim()}. ` : "";
+          fullPrompt = `${basePrompt}Generate a ${perspectivePrompts[perspective]} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
+
+          referenceToUse = perspective === "right" || !rightViewImage
+            ? referenceImages[0]
+            : {
+                data: rightViewImage.data,
+                mimeType: rightViewImage.mimeType,
+              };
+        }
+
+        const images = await fluxService.generateImages(
+          fullPrompt,
+          referenceToUse
+        );
+
+        if (images.length > 0) {
+          const newImage = {
+            ...images[0],
+            perspective: perspective,
+          };
+
           setGeneratedImages((prev) => {
             return prev.map((img) =>
-              img.perspective === newImage.perspective ? newImage : img
+              img.perspective === perspective ? newImage : img
             );
           });
+        }
+
+        setPerspectiveLoadingStates((prev) => ({
+          ...prev,
+          [perspective]: false,
+        }));
+      } else {
+        // Regenerate with Gemini
+        if (!imageAnalysis) {
+          setError("Missing image analysis");
           setPerspectiveLoadingStates((prev) => ({
             ...prev,
             [perspective]: false,
           }));
-        },
-        () => {
-          // Already handled by setPerspectiveLoadingStates above
-        },
-        perspective === "right" ? undefined : rightViewImage
-      );
+          return;
+        }
+
+        const rightViewImage = generatedImages.find(
+          (img) => img.perspective === "right"
+        );
+
+        await geminiService.regenerateSpecificPerspective(
+          referenceImages[0],
+          perspective,
+          imageAnalysis,
+          prompt.trim() || undefined,
+          (newImage) => {
+            setGeneratedImages((prev) => {
+              return prev.map((img) =>
+                img.perspective === newImage.perspective ? newImage : img
+              );
+            });
+            setPerspectiveLoadingStates((prev) => ({
+              ...prev,
+              [perspective]: false,
+            }));
+          },
+          () => {
+            // Already handled by setPerspectiveLoadingStates above
+          },
+          perspective === "right" ? undefined : rightViewImage
+        );
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to regenerate perspective"
@@ -194,8 +366,8 @@ export function PerspectiveGenerator({
     perspective: "front" | "right" | "back" | "left",
     editInstructions: string
   ) => {
-    if (!imageAnalysis || referenceImages.length === 0) {
-      setError("Missing image analysis or reference image");
+    if (referenceImages.length === 0) {
+      setError("Missing reference image");
       return;
     }
 
@@ -210,34 +382,85 @@ export function PerspectiveGenerator({
     setPerspectiveLoadingStates((prev) => ({ ...prev, [perspective]: true }));
     setError("");
 
-    const rightViewImage = generatedImages.find(
-      (img) => img.perspective === "right"
-    );
-
     try {
-      await geminiService.editSpecificPerspective(
-        referenceImages[0],
-        perspective,
-        imageAnalysis,
-        currentImage,
-        editInstructions,
-        prompt.trim() || undefined,
-        (newImage) => {
+      if (selectedModel === "flux" && fluxService) {
+        // Edit with Flux
+        const perspectivePrompts: { [key: string]: string } = {
+          front: "front view, facing camera directly, symmetrical composition",
+          right: "right side view, 90-degree profile",
+          back: "back view, rear side visible",
+          left: "180° rotated view showing the opposite side",
+        };
+
+        const fullPrompt = `${editInstructions}. Maintain ${perspectivePrompts[perspective]} of this object. Keep consistent lighting, style, and white background. Orthographic view.`;
+
+        // For Flux, we'll use the current generated image as reference
+        const currentImageAsReference: ReferenceImage = {
+          data: currentImage.data,
+          mimeType: currentImage.mimeType,
+        };
+
+        const images = await fluxService.generateImages(
+          fullPrompt,
+          currentImageAsReference
+        );
+
+        if (images.length > 0) {
+          const newImage = {
+            ...images[0],
+            perspective: perspective,
+          };
+
           setGeneratedImages((prev) => {
             return prev.map((img) =>
-              img.perspective === newImage.perspective ? newImage : img
+              img.perspective === perspective ? newImage : img
             );
           });
+        }
+
+        setPerspectiveLoadingStates((prev) => ({
+          ...prev,
+          [perspective]: false,
+        }));
+      } else {
+        // Edit with Gemini
+        if (!imageAnalysis) {
+          setError("Missing image analysis");
           setPerspectiveLoadingStates((prev) => ({
             ...prev,
             [perspective]: false,
           }));
-        },
-        () => {
-          // Already handled by setPerspectiveLoadingStates above
-        },
-        perspective === "right" ? undefined : rightViewImage
-      );
+          return;
+        }
+
+        const rightViewImage = generatedImages.find(
+          (img) => img.perspective === "right"
+        );
+
+        await geminiService.editSpecificPerspective(
+          referenceImages[0],
+          perspective,
+          imageAnalysis,
+          currentImage,
+          editInstructions,
+          prompt.trim() || undefined,
+          (newImage) => {
+            setGeneratedImages((prev) => {
+              return prev.map((img) =>
+                img.perspective === newImage.perspective ? newImage : img
+              );
+            });
+            setPerspectiveLoadingStates((prev) => ({
+              ...prev,
+              [perspective]: false,
+            }));
+          },
+          () => {
+            // Already handled by setPerspectiveLoadingStates above
+          },
+          perspective === "right" ? undefined : rightViewImage
+        );
+      }
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Failed to edit perspective"
@@ -266,7 +489,11 @@ export function PerspectiveGenerator({
   const handleDownload = (image: GeneratedImage) => {
     console.log("handle download", image);
 
-    geminiService.downloadImage(image);
+    if (selectedModel === "flux" && fluxService) {
+      fluxService.downloadImage(image);
+    } else {
+      geminiService.downloadImage(image);
+    }
   };
 
   const handleBatchDownload = () => {
@@ -294,7 +521,9 @@ export function PerspectiveGenerator({
           return;
         }
 
-        const referenceImage = await geminiService.fileToReferenceImage(file);
+        // Use the appropriate service based on selected model
+        const service = selectedModel === "flux" && fluxService ? fluxService : geminiService;
+        const referenceImage = await service.fileToReferenceImage(file);
         newReferenceImages.push(referenceImage);
       }
 
@@ -365,6 +594,39 @@ export function PerspectiveGenerator({
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
+            <Label htmlFor="model-select">AI Model</Label>
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant={selectedModel === "gemini" ? "default" : "outline"}
+                onClick={() => setSelectedModel("gemini")}
+                className="flex-1"
+              >
+                Google Gemini
+              </Button>
+              <Button
+                type="button"
+                variant={selectedModel === "flux" ? "default" : "outline"}
+                onClick={() => setSelectedModel("flux")}
+                disabled={!replicateToken}
+                className="flex-1"
+              >
+                Flux Kontext Pro
+              </Button>
+            </div>
+            {selectedModel === "flux" && !replicateToken && (
+              <p className="text-xs text-muted-foreground">
+                Replicate API token required for Flux model
+              </p>
+            )}
+            {selectedModel === "flux" && (
+              <p className="text-xs text-muted-foreground">
+                Note: Flux generates perspectives sequentially without analysis
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="reference-images">
               Reference Images (required)
             </Label>
@@ -397,7 +659,7 @@ export function PerspectiveGenerator({
                 {referenceImages.map((image, index) => (
                   <div key={index} className="relative group">
                     <img
-                      src={geminiService.createReferenceImageUrl(image)}
+                      src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createReferenceImageUrl(image)}
                       alt={`Reference ${index + 1}`}
                       className="w-full h-20 object-cover rounded border"
                     />
@@ -564,7 +826,7 @@ export function PerspectiveGenerator({
                         {image ? (
                           <>
                             <img
-                              src={geminiService.createImageUrl(image)}
+                              src={(selectedModel === "flux" && fluxService ? fluxService : geminiService).createImageUrl(image)}
                               alt={`${perspective} view`}
                               className="w-full h-full object-cover"
                             />
