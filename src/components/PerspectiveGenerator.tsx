@@ -41,6 +41,7 @@ import {
   Box,
 } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
+import { ImageUploadDropzone } from "./ImageUploadDropzone";
 
 type ImageModel = "gemini" | "flux";
 
@@ -500,12 +501,7 @@ export function PerspectiveGenerator({
     geminiService.downloadAllImages(generatedImages);
   };
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files) return;
-
+  const handleFilesSelected = async (files: FileList) => {
     setError("");
     const newReferenceImages: ReferenceImage[] = [];
 
@@ -626,31 +622,13 @@ export function PerspectiveGenerator({
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="reference-images">
-              Reference Images (required)
-            </Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <input
-                id="reference-images"
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <label
-                htmlFor="reference-images"
-                className="cursor-pointer flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Upload className="w-8 h-8" />
-                <span>Upload reference images</span>
-                <span className="text-xs">
-                  Click to browse or drag and drop
-                </span>
-              </label>
-            </div>
-          </div>
+          <ImageUploadDropzone
+            id="reference-images"
+            label="Reference Images (required)"
+            description="PNG, JPG supported"
+            multiple={true}
+            onFilesSelected={handleFilesSelected}
+          />
 
           {referenceImages.length > 0 && (
             <div className="space-y-2">

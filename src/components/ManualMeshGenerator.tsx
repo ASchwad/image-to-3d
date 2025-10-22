@@ -21,8 +21,9 @@ import {
   type TrellisOutput,
   type TrellisInput,
 } from "@/services/trellis";
-import { Upload, X, Loader2, Box, Settings } from "lucide-react";
+import { X, Loader2, Box, Settings } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
+import { ImageUploadDropzone } from "./ImageUploadDropzone";
 
 interface UploadedImage {
   id: string;
@@ -60,12 +61,7 @@ export function ManualMeshGenerator({
 
   const trellisService = new TrellisService(replicateToken);
 
-  const handleFileUpload = async (
-    event: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const files = event.target.files;
-    if (!files) return;
-
+  const handleFilesSelected = async (files: FileList) => {
     setError("");
 
     try {
@@ -210,31 +206,13 @@ export function ManualMeshGenerator({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="manual-images">
-              Upload Images (1-4 images, multiple perspectives recommended)
-            </Label>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
-              <input
-                id="manual-images"
-                type="file"
-                multiple
-                accept="image/*"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              <label
-                htmlFor="manual-images"
-                className="cursor-pointer flex flex-col items-center gap-2 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Upload className="w-8 h-8" />
-                <span>Upload perspective images</span>
-                <span className="text-xs">
-                  Click to browse or drag and drop • PNG, JPG supported
-                </span>
-              </label>
-            </div>
-          </div>
+          <ImageUploadDropzone
+            id="manual-images"
+            label="Upload Images (1-4 images, multiple perspectives recommended)"
+            description="Upload perspective images • PNG, JPG supported"
+            multiple={true}
+            onFilesSelected={handleFilesSelected}
+          />
 
           {uploadedImages.length > 0 && (
             <div className="space-y-4">
