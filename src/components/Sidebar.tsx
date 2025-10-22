@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
   ChevronLeft,
   Home,
   Image,
   Box,
-  Upload,
+  Move3D,
   Info,
   Sparkles,
 } from "lucide-react";
@@ -19,7 +20,7 @@ interface SidebarItemProps {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   isCollapsed: boolean;
-  onClick?: () => void;
+  to: string;
   isActive?: boolean;
 }
 
@@ -27,29 +28,34 @@ const SidebarItem = ({
   icon: Icon,
   label,
   isCollapsed,
-  onClick,
+  to,
   isActive = false,
-}: SidebarItemProps) => (
-  <Button
-    variant={isActive ? "secondary" : "ghost"}
-    onClick={onClick}
-    className="w-full h-12 justify-start"
-  >
-    <div className="flex justify-start shrink-0">
-      <Icon className="h-5 w-5" />
-    </div>
-    <span
-      className={`text-sm font-medium transition-all duration-300 ${
-        isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100 ml-3"
-      }`}
+}: SidebarItemProps) => {
+  const navigate = useNavigate();
+
+  return (
+    <Button
+      variant={isActive ? "secondary" : "ghost"}
+      onClick={() => navigate(to)}
+      className="w-full h-12 justify-start"
     >
-      {label}
-    </span>
-  </Button>
-);
+      <div className="flex justify-start shrink-0">
+        <Icon className="h-5 w-5" />
+      </div>
+      <span
+        className={`text-sm font-medium transition-all duration-300 ${
+          isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100 ml-3"
+        }`}
+      >
+        {label}
+      </span>
+    </Button>
+  );
+};
 
 export function Sidebar({ content, onWidthChange }: SidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const location = useLocation();
 
   const collapsedWidth = 64; // w-16 = 4rem = 64px
   const expandedWidth = 256; // w-64 = 16rem = 256px
@@ -113,17 +119,33 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
 
       {/* Navigation Section */}
       <div className="px-2 pb-4">
-        <SidebarItem icon={Home} label="Home" isCollapsed={isCollapsed} />
+        <SidebarItem
+          icon={Home}
+          label="Home"
+          isCollapsed={isCollapsed}
+          to="/"
+          isActive={location.pathname === "/"}
+        />
+        <SidebarItem
+          icon={Box}
+          label="Generate image + 3D"
+          isCollapsed={isCollapsed}
+          to="/generate-image-and-3d"
+          isActive={location.pathname === "/generate-image-and-3d"}
+        />
         <SidebarItem
           icon={Image}
-          label="Image Generation"
+          label="Single Image"
           isCollapsed={isCollapsed}
+          to="/single-image"
+          isActive={location.pathname === "/single-image"}
         />
-        <SidebarItem icon={Box} label="3D Assets" isCollapsed={isCollapsed} />
         <SidebarItem
-          icon={Upload}
-          label="Direct Upload"
+          icon={Move3D}
+          label="Generate 3D asset"
           isCollapsed={isCollapsed}
+          to="/generate-3d-asset"
+          isActive={location.pathname === "/generate-3d-asset"}
         />
       </div>
 
@@ -137,7 +159,12 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
 
       {/* Bottom Section */}
       <div className="px-2 py-4 border-t">
-        <SidebarItem icon={Info} label="About" isCollapsed={isCollapsed} />
+        <SidebarItem
+          to=""
+          icon={Info}
+          label="About"
+          isCollapsed={isCollapsed}
+        />
       </div>
     </aside>
   );
