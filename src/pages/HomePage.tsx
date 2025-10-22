@@ -22,7 +22,7 @@ export function HomePage() {
 
         <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
           <Link to="/generate-image-and-3d">
-            <Card className="h-full hover:border-primary transition-colors cursor-pointer">
+            <Card className="h-full cursor-pointer transition-transform duration-300 ease-out hover:scale-101">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Box className="w-5 h-5" />
@@ -30,8 +30,9 @@ export function HomePage() {
                 </CardTitle>
                 <CardDescription>
                   Generate 4 clean and coherent perspectives from an input
-                  image. Correct the perspective details and generate a 3D
-                  Assets
+                  image. Correct the perspective details and then generate 3D
+                  Assets. Ready for further tuning in Blender or for
+                  3D-printing.
                 </CardDescription>
                 <div className="flex gap-2 mt-3">
                   <Badge variant="secondary">Nano Banana</Badge>
@@ -43,7 +44,7 @@ export function HomePage() {
           </Link>
 
           <Link to="/single-image">
-            <Card className="h-full hover:border-primary transition-colors cursor-pointer">
+            <Card className="h-full cursor-pointer transition-transform duration-300 ease-out hover:scale-101">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Image className="w-5 h-5" />
@@ -60,12 +61,12 @@ export function HomePage() {
             </Card>
           </Link>
 
-          <Link to="/generate-3d-asset">
-            <Card className="h-full hover:border-primary transition-colors cursor-pointer">
+          <Link to="/veloce">
+            <Card className="h-full cursor-pointer transition-transform duration-300 ease-out hover:scale-101">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Move3D className="w-5 h-5" />
-                  Veloce - Prompt to Motion Graphics
+                  Veloce
                 </CardTitle>
                 <CardDescription>
                   Generate motion graphics from text prompts quickly and easily

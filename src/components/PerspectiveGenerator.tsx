@@ -597,420 +597,426 @@ export function PerspectiveGenerator({
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ImageIcon className="w-5 h-5" />
-            Generate image + 3D asset
-          </CardTitle>
-          <CardDescription>
-            Generate 4 Perspectives and a 3D Asset from a single image
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <ModelSelector
-            selectedModel={selectedModel}
-            onModelChange={setSelectedModel}
-            replicateToken={replicateToken}
-          />
-
-          <ImageUploadDropzone
-            id="reference-images"
-            label="Reference Images (required)"
-            description="PNG, JPG supported"
-            multiple={true}
-            onFilesSelected={handleFilesSelected}
-            images={referenceImages.map((image, index) => ({
-              id: index,
-              url: (selectedModel === "flux" && fluxService
-                ? fluxService
-                : geminiService
-              ).createReferenceImageUrl(image),
-            }))}
-            onRemoveImage={(id) => removeReferenceImage(id as number)}
-          />
-
-          <div className="space-y-2">
-            <Label htmlFor="prompt">
-              Additional style instructions (optional)
-            </Label>
-            <Textarea
-              id="prompt"
-              placeholder="Style adjustments: realistic, cartoon style, metallic materials..."
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              rows={3}
+    <div className="flex items-center justify-center min-h-screen p-8">
+      <div className="max-w-4xl w-full space-y-6 z-10">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <ImageIcon className="w-5 h-5" />
+              Generate 3D assets from images
+            </CardTitle>
+            <CardDescription>
+              Generate 4 clean and coherent perspectives from an input image.
+              Correct the perspective details and then generate 3D Assets. Ready
+              for further tuning in Blender or for 3D-printing.{" "}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ModelSelector
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              replicateToken={replicateToken}
             />
-          </div>
 
-          {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-              {error}
+            <ImageUploadDropzone
+              id="reference-images"
+              label="Reference Images (required)"
+              description="PNG, JPG supported"
+              multiple={true}
+              onFilesSelected={handleFilesSelected}
+              images={referenceImages.map((image, index) => ({
+                id: index,
+                url: (selectedModel === "flux" && fluxService
+                  ? fluxService
+                  : geminiService
+                ).createReferenceImageUrl(image),
+              }))}
+              onRemoveImage={(id) => removeReferenceImage(id as number)}
+            />
+
+            <div className="space-y-2">
+              <Label htmlFor="prompt">
+                Additional style instructions (optional)
+              </Label>
+              <Textarea
+                id="prompt"
+                placeholder="Style adjustments: realistic, cartoon style, metallic materials..."
+                value={prompt}
+                onChange={(e) => setPrompt(e.target.value)}
+                rows={3}
+              />
             </div>
-          )}
 
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating || referenceImages.length === 0}
-            className="w-full"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Generating 4 Views...
-              </>
-            ) : (
-              "Generate 4 Perspectives"
-            )}
-          </Button>
-        </CardContent>
-      </Card>
-
-      {/* Analysis and Prompts Display */}
-      {imageAnalysis && Object.keys(generatedPrompts).length > 0 && (
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Image Analysis</CardTitle>
-              <CardDescription>
-                AI analysis of your reference image used for generating
-                consistent perspectives
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <Label className="font-medium">Subject:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.subject}
-                  </p>
-                </div>
-                <div>
-                  <Label className="font-medium">Object Type:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.objectType}
-                  </p>
-                </div>
-                <div>
-                  <Label className="font-medium">Style:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.style}
-                  </p>
-                </div>
-                <div>
-                  <Label className="font-medium">Lighting:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.lighting}
-                  </p>
-                </div>
-                <div>
-                  <Label className="font-medium">Materials:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.materials}
-                  </p>
-                </div>
-                <div>
-                  <Label className="font-medium">Background:</Label>
-                  <p className="text-muted-foreground mt-1">
-                    {imageAnalysis.background}
-                  </p>
-                </div>
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
+                {error}
               </div>
-            </CardContent>
-          </Card>
+            )}
 
+            <Button
+              onClick={handleGenerate}
+              disabled={isGenerating || referenceImages.length === 0}
+              className="w-full"
+            >
+              {isGenerating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating 4 Views...
+                </>
+              ) : (
+                "Generate 4 Perspectives"
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+
+        {/* Analysis and Prompts Display */}
+        {imageAnalysis && Object.keys(generatedPrompts).length > 0 && (
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Image Analysis</CardTitle>
+                <CardDescription>
+                  AI analysis of your reference image used for generating
+                  consistent perspectives
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <Label className="font-medium">Subject:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.subject}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Object Type:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.objectType}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Style:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.style}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Lighting:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.lighting}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Materials:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.materials}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="font-medium">Background:</Label>
+                    <p className="text-muted-foreground mt-1">
+                      {imageAnalysis.background}
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Generated Prompts</CardTitle>
+                <CardDescription>
+                  The specific prompts used for each perspective to ensure
+                  consistency
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {Object.entries(generatedPrompts).map(
+                    ([perspective, prompt]) => (
+                      <div key={perspective} className="border rounded-lg p-4">
+                        <Label className="font-medium capitalize text-primary">
+                          {perspective} View Prompt:
+                        </Label>
+                        <div className="mt-2 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
+                          {prompt}
+                        </div>
+                      </div>
+                    )
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {generatedImages.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle>Generated Prompts</CardTitle>
+              <CardTitle>3D Perspective Views</CardTitle>
               <CardDescription>
-                The specific prompts used for each perspective to ensure
-                consistency
+                4 orthographic views generated for 3D modeling
               </CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {Object.entries(generatedPrompts).map(
-                  ([perspective, prompt]) => (
-                    <div key={perspective} className="border rounded-lg p-4">
-                      <Label className="font-medium capitalize text-primary">
-                        {perspective} View Prompt:
-                      </Label>
-                      <div className="mt-2 p-3 bg-muted rounded text-xs font-mono overflow-auto max-h-32">
-                        {prompt}
+                <div className="grid grid-cols-2 gap-4">
+                  {["front", "right", "back", "left"].map((perspective) => {
+                    const image = generatedImages.find(
+                      (img) => img.perspective === perspective
+                    );
+                    const isCurrentlyGenerating =
+                      currentGeneratingPerspective === perspective;
+                    const isRegenerating =
+                      perspectiveLoadingStates[
+                        perspective as "front" | "right" | "back" | "left"
+                      ];
+                    const isProcessing =
+                      isCurrentlyGenerating || isRegenerating;
+                    return (
+                      <div key={perspective} className="relative group">
+                        <div
+                          className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
+                            isProcessing
+                              ? "border-blue-400 bg-blue-50"
+                              : "border-gray-200"
+                          }`}
+                        >
+                          {image ? (
+                            <>
+                              <img
+                                src={(selectedModel === "flux" && fluxService
+                                  ? fluxService
+                                  : geminiService
+                                ).createImageUrl(image)}
+                                alt={`${perspective} view`}
+                                className="w-full h-full object-cover"
+                              />
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+                                <Button
+                                  onClick={() => handleDownload(image)}
+                                  size="sm"
+                                  variant="secondary"
+                                  className="flex items-center gap-1"
+                                >
+                                  <Download className="w-3 h-3" />
+                                  Download
+                                </Button>
+                                <Button
+                                  onClick={() =>
+                                    handleRegenerateSpecificPerspective(
+                                      perspective as
+                                        | "front"
+                                        | "right"
+                                        | "back"
+                                        | "left"
+                                    )
+                                  }
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={isGenerating || isRegenerating}
+                                  className="flex items-center gap-1"
+                                >
+                                  <RefreshCw className="w-3 h-3" />
+                                  Regenerate
+                                </Button>
+                                <Button
+                                  onClick={() => {
+                                    setEditingPerspective(perspective);
+                                    setEditPrompt("");
+                                  }}
+                                  size="sm"
+                                  variant="secondary"
+                                  disabled={isGenerating || isRegenerating}
+                                  className="flex items-center gap-1"
+                                >
+                                  <EditIcon className="w-3 h-3" />
+                                  Edit
+                                </Button>
+                              </div>
+                              {isRegenerating && (
+                                <div className="absolute inset-0 bg-blue-50/90 flex items-center justify-center">
+                                  <div className="flex flex-col items-center gap-2">
+                                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                                    <span className="text-xs text-blue-600">
+                                      Regenerating...
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-400">
+                              {isCurrentlyGenerating ? (
+                                <div className="flex flex-col items-center gap-2">
+                                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                                  <span className="text-xs text-blue-600">
+                                    Generating...
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="text-xs">Waiting...</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center mt-2">
+                          <Label
+                            className={`text-sm font-medium capitalize ${
+                              isProcessing ? "text-blue-600" : ""
+                            }`}
+                          >
+                            {perspective} View
+                            {isProcessing && (
+                              <span className="ml-1 text-blue-500">●</span>
+                            )}
+                          </Label>
+                        </div>
                       </div>
-                    </div>
-                  )
+                    );
+                  })}
+                </div>
+                {generatedImages.length > 0 && (
+                  <div className="flex justify-center gap-2 pt-4">
+                    {generatedImages.length === 4 && (
+                      <>
+                        <Button
+                          onClick={handleBatchDownload}
+                          variant="outline"
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="w-4 h-4" />
+                          Download All Views
+                        </Button>
+                        {trellisService && (
+                          <Button
+                            onClick={handleGenerate3DMesh}
+                            variant="default"
+                            disabled={
+                              isGenerating ||
+                              Object.values(perspectiveLoadingStates).some(
+                                Boolean
+                              ) ||
+                              meshProgress.status === "uploading" ||
+                              meshProgress.status === "generating"
+                            }
+                            className="flex items-center gap-2"
+                          >
+                            {meshProgress.status === "uploading" ||
+                            meshProgress.status === "generating" ? (
+                              <>
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                                {meshProgress.message ||
+                                  "Generating 3D Mesh..."}
+                              </>
+                            ) : (
+                              <>
+                                <Box className="w-4 h-4" />
+                                Generate 3D Mesh
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </>
+                    )}
+                    <Button
+                      onClick={handleRegenerateAll}
+                      variant="outline"
+                      disabled={
+                        isGenerating ||
+                        Object.values(perspectiveLoadingStates).some(Boolean)
+                      }
+                      className="flex items-center gap-2"
+                    >
+                      <RotateCcw className="w-4 h-4" />
+                      Regenerate All
+                    </Button>
+                  </div>
                 )}
               </div>
             </CardContent>
           </Card>
-        </div>
-      )}
+        )}
 
-      {generatedImages.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>3D Perspective Views</CardTitle>
-            <CardDescription>
-              4 orthographic views generated for 3D modeling
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
+        <MeshGenerationResult
+          meshProgress={meshProgress}
+          meshResult={meshResult}
+          trellisService={trellisService}
+          imageAnalysis={imageAnalysis || undefined}
+        />
+
+        <Dialog
+          open={!!editingPerspective}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingPerspective(null);
+              setEditPrompt("");
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>
+                Edit{" "}
+                {editingPerspective
+                  ? editingPerspective.charAt(0).toUpperCase() +
+                    editingPerspective.slice(1)
+                  : ""}{" "}
+                View
+              </DialogTitle>
+              <DialogDescription>
+                What would you like to change?
+              </DialogDescription>
+            </DialogHeader>
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                {["front", "right", "back", "left"].map((perspective) => {
-                  const image = generatedImages.find(
-                    (img) => img.perspective === perspective
-                  );
-                  const isCurrentlyGenerating =
-                    currentGeneratingPerspective === perspective;
-                  const isRegenerating =
-                    perspectiveLoadingStates[
-                      perspective as "front" | "right" | "back" | "left"
-                    ];
-                  const isProcessing = isCurrentlyGenerating || isRegenerating;
-                  return (
-                    <div key={perspective} className="relative group">
-                      <div
-                        className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
-                          isProcessing
-                            ? "border-blue-400 bg-blue-50"
-                            : "border-gray-200"
-                        }`}
-                      >
-                        {image ? (
-                          <>
-                            <img
-                              src={(selectedModel === "flux" && fluxService
-                                ? fluxService
-                                : geminiService
-                              ).createImageUrl(image)}
-                              alt={`${perspective} view`}
-                              className="w-full h-full object-cover"
-                            />
-                            <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                              <Button
-                                onClick={() => handleDownload(image)}
-                                size="sm"
-                                variant="secondary"
-                                className="flex items-center gap-1"
-                              >
-                                <Download className="w-3 h-3" />
-                                Download
-                              </Button>
-                              <Button
-                                onClick={() =>
-                                  handleRegenerateSpecificPerspective(
-                                    perspective as
-                                      | "front"
-                                      | "right"
-                                      | "back"
-                                      | "left"
-                                  )
-                                }
-                                size="sm"
-                                variant="secondary"
-                                disabled={isGenerating || isRegenerating}
-                                className="flex items-center gap-1"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                                Regenerate
-                              </Button>
-                              <Button
-                                onClick={() => {
-                                  setEditingPerspective(perspective);
-                                  setEditPrompt("");
-                                }}
-                                size="sm"
-                                variant="secondary"
-                                disabled={isGenerating || isRegenerating}
-                                className="flex items-center gap-1"
-                              >
-                                <EditIcon className="w-3 h-3" />
-                                Edit
-                              </Button>
-                            </div>
-                            {isRegenerating && (
-                              <div className="absolute inset-0 bg-blue-50/90 flex items-center justify-center">
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                  <span className="text-xs text-blue-600">
-                                    Regenerating...
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </>
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-gray-400">
-                            {isCurrentlyGenerating ? (
-                              <div className="flex flex-col items-center gap-2">
-                                <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                <span className="text-xs text-blue-600">
-                                  Generating...
-                                </span>
-                              </div>
-                            ) : (
-                              <div className="text-xs">Waiting...</div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="text-center mt-2">
-                        <Label
-                          className={`text-sm font-medium capitalize ${
-                            isProcessing ? "text-blue-600" : ""
-                          }`}
-                        >
-                          {perspective} View
-                          {isProcessing && (
-                            <span className="ml-1 text-blue-500">●</span>
-                          )}
-                        </Label>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div>
+                <Label htmlFor="edit-prompt">Modifications</Label>
+                <Textarea
+                  id="edit-prompt"
+                  placeholder="e.g., Make it brighter, change the color to blue, add more detail..."
+                  value={editPrompt}
+                  onChange={(e) => setEditPrompt(e.target.value)}
+                  rows={3}
+                  className="mt-1"
+                />
               </div>
-              {generatedImages.length > 0 && (
-                <div className="flex justify-center gap-2 pt-4">
-                  {generatedImages.length === 4 && (
-                    <>
-                      <Button
-                        onClick={handleBatchDownload}
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download All Views
-                      </Button>
-                      {trellisService && (
-                        <Button
-                          onClick={handleGenerate3DMesh}
-                          variant="default"
-                          disabled={
-                            isGenerating ||
-                            Object.values(perspectiveLoadingStates).some(
-                              Boolean
-                            ) ||
-                            meshProgress.status === "uploading" ||
-                            meshProgress.status === "generating"
-                          }
-                          className="flex items-center gap-2"
-                        >
-                          {meshProgress.status === "uploading" ||
-                          meshProgress.status === "generating" ? (
-                            <>
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                              {meshProgress.message || "Generating 3D Mesh..."}
-                            </>
-                          ) : (
-                            <>
-                              <Box className="w-4 h-4" />
-                              Generate 3D Mesh
-                            </>
-                          )}
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  <Button
-                    onClick={handleRegenerateAll}
-                    variant="outline"
-                    disabled={
-                      isGenerating ||
-                      Object.values(perspectiveLoadingStates).some(Boolean)
-                    }
-                    className="flex items-center gap-2"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    Regenerate All
-                  </Button>
-                </div>
-              )}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      <MeshGenerationResult
-        meshProgress={meshProgress}
-        meshResult={meshResult}
-        trellisService={trellisService}
-        imageAnalysis={imageAnalysis || undefined}
-      />
-
-      <Dialog
-        open={!!editingPerspective}
-        onOpenChange={(open) => {
-          if (!open) {
-            setEditingPerspective(null);
-            setEditPrompt("");
-          }
-        }}
-      >
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              Edit{" "}
-              {editingPerspective
-                ? editingPerspective.charAt(0).toUpperCase() +
-                  editingPerspective.slice(1)
-                : ""}{" "}
-              View
-            </DialogTitle>
-            <DialogDescription>
-              What would you like to change?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-prompt">Modifications</Label>
-              <Textarea
-                id="edit-prompt"
-                placeholder="e.g., Make it brighter, change the color to blue, add more detail..."
-                value={editPrompt}
-                onChange={(e) => setEditPrompt(e.target.value)}
-                rows={3}
-                className="mt-1"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setEditingPerspective(null);
-                setEditPrompt("");
-              }}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={async () => {
-                if (editPrompt.trim()) {
-                  const perspective = editingPerspective as
-                    | "front"
-                    | "right"
-                    | "back"
-                    | "left";
-                  const prompt = editPrompt.trim();
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
                   setEditingPerspective(null);
                   setEditPrompt("");
-                  await handleEditSpecificPerspective(perspective, prompt);
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  if (editPrompt.trim()) {
+                    const perspective = editingPerspective as
+                      | "front"
+                      | "right"
+                      | "back"
+                      | "left";
+                    const prompt = editPrompt.trim();
+                    setEditingPerspective(null);
+                    setEditPrompt("");
+                    await handleEditSpecificPerspective(perspective, prompt);
+                  }
+                }}
+                disabled={
+                  !editPrompt.trim() ||
+                  Object.values(perspectiveLoadingStates).some(Boolean)
                 }
-              }}
-              disabled={
-                !editPrompt.trim() ||
-                Object.values(perspectiveLoadingStates).some(Boolean)
-              }
-            >
-              Apply Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+              >
+                Apply Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </div>
     </div>
   );
 }

@@ -189,8 +189,9 @@ export function ManualMeshGenerator({
   };
 
   return (
-    <div className="space-y-6">
-      <Card>
+    <div className="flex items-center justify-center min-h-screen p-8">
+      <div className="max-w-4xl w-full space-y-6 z-10">
+        <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="w-5 h-5" />
@@ -510,6 +511,7 @@ export function ManualMeshGenerator({
         meshResult={meshResult}
         trellisService={trellisService}
       />
+      </div>
     </div>
   );
 }
