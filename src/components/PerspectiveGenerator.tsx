@@ -80,6 +80,11 @@ export function PerspectiveGenerator({
   });
   const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
 
+  // Track which perspectives are selected for mesh generation
+  const [selectedPerspectives, setSelectedPerspectives] = useState<Set<string>>(
+    new Set(["front", "right", "back", "left"])
+  );
+
   const geminiService = new GeminiImageService(apiKey);
   const fluxService = replicateToken
     ? new FluxImageService(replicateToken)
@@ -519,19 +524,33 @@ export function PerspectiveGenerator({
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
+  const togglePerspectiveSelection = (perspective: string) => {
+    setSelectedPerspectives((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(perspective)) {
+        newSet.delete(perspective);
+      } else {
+        newSet.add(perspective);
+      }
+      return newSet;
+    });
+  };
+
   const handleGenerate3DMesh = async () => {
     if (!trellisService) {
       setError("Replicate API token not configured");
       return;
     }
 
-    if (generatedImages.length !== 4) {
-      setError("Need all 4 perspective images to generate 3D mesh");
+    if (selectedPerspectives.size === 0) {
+      setError("Please select at least 1 image for mesh generation");
       return;
     }
 
-    const orderedImages = ["front", "right", "back", "left"].map(
-      (perspective) => {
+    // Only include selected perspectives that have generated images
+    const orderedImages = ["front", "right", "back", "left"]
+      .filter((perspective) => selectedPerspectives.has(perspective))
+      .map((perspective) => {
         const image = generatedImages.find(
           (img) => img.perspective === perspective
         );
@@ -539,8 +558,12 @@ export function PerspectiveGenerator({
           throw new Error(`Missing ${perspective} perspective image`);
         }
         return image;
-      }
-    );
+      });
+
+    if (orderedImages.length === 0) {
+      setError("No selected images available for mesh generation");
+      return;
+    }
 
     setError("");
     setMeshResult(null);
@@ -661,13 +684,16 @@ export function PerspectiveGenerator({
                       ];
                     const isProcessing =
                       isCurrentlyGenerating || isRegenerating;
+                    const isSelected = selectedPerspectives.has(perspective);
                     return (
                       <div key={perspective} className="relative group">
                         <div
                           className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
                             isProcessing
                               ? "border-blue-400 bg-blue-50"
-                              : "border-gray-200"
+                              : isSelected
+                              ? "border-blue-500"
+                              : "border-gray-300"
                           }`}
                         >
                           {image ? (
@@ -678,8 +704,42 @@ export function PerspectiveGenerator({
                                   : geminiService
                                 ).createImageUrl(image)}
                                 alt={`${perspective} view`}
-                                className="w-full h-full object-cover"
+                                className={`w-full h-full object-cover transition-opacity ${
+                                  isSelected ? "opacity-100" : "opacity-40"
+                                }`}
                               />
+                              {/* Selection checkbox overlay */}
+                              <div className="absolute top-2 left-2 z-10">
+                                <button
+                                  onClick={() =>
+                                    togglePerspectiveSelection(perspective)
+                                  }
+                                  className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
+                                    isSelected
+                                      ? "bg-blue-500 border-blue-500"
+                                      : "bg-white border-gray-300 hover:border-gray-400"
+                                  }`}
+                                  title={
+                                    isSelected
+                                      ? "Deselect for mesh generation"
+                                      : "Select for mesh generation"
+                                  }
+                                >
+                                  {isSelected && (
+                                    <svg
+                                      className="w-4 h-4 text-white"
+                                      fill="none"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path d="M5 13l4 4L19 7" />
+                                    </svg>
+                                  )}
+                                </button>
+                              </div>
                               <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
                                 <Button
                                   onClick={() => handleDownload(image)}
@@ -765,60 +825,71 @@ export function PerspectiveGenerator({
                   })}
                 </div>
                 {generatedImages.length > 0 && (
-                  <div className="flex justify-center gap-2 pt-4">
-                    {generatedImages.length === 4 && (
-                      <>
-                        <Button
-                          onClick={handleBatchDownload}
-                          variant="outline"
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="w-4 h-4" />
-                          Download All Views
-                        </Button>
-                        {trellisService && (
+                  <div className="space-y-2">
+                    {trellisService && selectedPerspectives.size > 0 && (
+                      <div className="text-center text-sm text-muted-foreground">
+                        {selectedPerspectives.size} of {generatedImages.length} images selected for mesh generation
+                      </div>
+                    )}
+                    <div className="flex justify-center gap-2 pt-2">
+                      {generatedImages.length === 4 && (
+                        <>
                           <Button
-                            onClick={handleGenerate3DMesh}
-                            variant="default"
-                            disabled={
-                              isGenerating ||
-                              Object.values(perspectiveLoadingStates).some(
-                                Boolean
-                              ) ||
-                              meshProgress.status === "uploading" ||
-                              meshProgress.status === "generating"
-                            }
+                            onClick={handleBatchDownload}
+                            variant="outline"
                             className="flex items-center gap-2"
                           >
-                            {meshProgress.status === "uploading" ||
-                            meshProgress.status === "generating" ? (
-                              <>
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                                {meshProgress.message ||
-                                  "Generating 3D Mesh..."}
-                              </>
-                            ) : (
-                              <>
-                                <Box className="w-4 h-4" />
-                                Generate 3D Mesh
-                              </>
-                            )}
+                            <Download className="w-4 h-4" />
+                            Download All Views
                           </Button>
-                        )}
-                      </>
-                    )}
-                    <Button
-                      onClick={handleRegenerateAll}
-                      variant="outline"
-                      disabled={
-                        isGenerating ||
-                        Object.values(perspectiveLoadingStates).some(Boolean)
-                      }
-                      className="flex items-center gap-2"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      Regenerate All
-                    </Button>
+                        </>
+                      )}
+                      {trellisService && generatedImages.length > 0 && (
+                        <Button
+                          onClick={handleGenerate3DMesh}
+                          variant="default"
+                          disabled={
+                            selectedPerspectives.size === 0 ||
+                            isGenerating ||
+                            Object.values(perspectiveLoadingStates).some(
+                              Boolean
+                            ) ||
+                            meshProgress.status === "uploading" ||
+                            meshProgress.status === "generating"
+                          }
+                          className="flex items-center gap-2"
+                        >
+                          {meshProgress.status === "uploading" ||
+                          meshProgress.status === "generating" ? (
+                            <>
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                              {meshProgress.message ||
+                                "Generating 3D Mesh..."}
+                            </>
+                          ) : (
+                            <>
+                              <Box className="w-4 h-4" />
+                              Generate 3D Mesh
+                              {selectedPerspectives.size > 0 &&
+                                selectedPerspectives.size < generatedImages.length &&
+                                ` (${selectedPerspectives.size})`}
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <Button
+                        onClick={handleRegenerateAll}
+                        variant="outline"
+                        disabled={
+                          isGenerating ||
+                          Object.values(perspectiveLoadingStates).some(Boolean)
+                        }
+                        className="flex items-center gap-2"
+                      >
+                        <RotateCcw className="w-4 h-4" />
+                        Regenerate All
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
