@@ -112,7 +112,7 @@ function App() {
             <Routes>
               <Route path="/" element={<HomePage />} />
               <Route
-                path="/generate-image-and-3d"
+                path="/generate-3d-assets"
                 element={
                   <GenerateImageAnd3DPage
                     apiKey={apiKey}

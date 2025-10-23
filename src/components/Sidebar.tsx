@@ -2,13 +2,21 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import {
+  Menubar,
+  MenubarContent,
+  MenubarItem,
+  MenubarMenu,
+  MenubarTrigger,
+} from "@/components/ui/menubar";
+import {
   ChevronLeft,
   Home,
   Image,
   Box,
   Move3D,
-  Info,
   Sparkles,
+  User,
+  Settings,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -130,8 +138,8 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
           icon={Box}
           label="Generate image + 3D"
           isCollapsed={isCollapsed}
-          to="/generate-image-and-3d"
-          isActive={location.pathname === "/generate-image-and-3d"}
+          to="/generate-3d-assets"
+          isActive={location.pathname === "/generate-3d-assets"}
         />
         <SidebarItem
           icon={Image}
@@ -158,13 +166,38 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
       {isCollapsed && <div className="flex-1" />}
 
       {/* Bottom Section */}
-      <div className="px-2 py-4 border-t">
-        <SidebarItem
-          to=""
-          icon={Info}
-          label="About"
-          isCollapsed={isCollapsed}
-        />
+      <div className="px-2 py-4">
+        {/* Profile Menu */}
+        <Menubar className="border-0 bg-transparent shadow-none p-0 h-auto w-full">
+          <MenubarMenu>
+            <MenubarTrigger
+              className={`w-full h-12 rounded-md bg-transparent hover:bg-accent focus:bg-accent data-[state=open]:bg-accent shadow-none border-none transition-all duration-300 ${
+                isCollapsed ? "px-0 justify-center" : "px-3 justify-start gap-2"
+              }`}
+            >
+              <div className="rounded-full bg-primary flex items-center justify-center shrink-0 w-8 h-8 text-primary-foreground font-medium text-sm">
+                A
+              </div>
+              <span
+                className={`text-sm text-muted-foreground truncate transition-all duration-300 ${
+                  isCollapsed ? "opacity-0 w-0 overflow-hidden" : "opacity-100"
+                }`}
+              >
+                Profile
+              </span>
+            </MenubarTrigger>
+            <MenubarContent>
+              <MenubarItem>
+                <User className="h-4 w-4 mr-2" />
+                Account
+              </MenubarItem>
+              <MenubarItem>
+                <Settings className="h-4 w-4 mr-2" />
+                Settings
+              </MenubarItem>
+            </MenubarContent>
+          </MenubarMenu>
+        </Menubar>
       </div>
     </aside>
   );

@@ -20,8 +20,7 @@ export function HomePage() {
           </h1>
         </header>
 
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
-          <Link to="/generate-image-and-3d">
+            <Link to="/generate-3d-assets">
             <Card className="h-full cursor-pointer transition-transform duration-300 ease-out hover:scale-101">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
