@@ -1,4 +1,4 @@
-import { PerspectiveGenerator } from "@/components/PerspectiveGenerator";
+import { UnifiedMeshGenerator } from "@/components/UnifiedMeshGenerator";
 
 interface GenerateImageAnd3DPageProps {
   apiKey: string;
@@ -9,5 +9,5 @@ export function GenerateImageAnd3DPage({
   apiKey,
   replicateToken,
 }: GenerateImageAnd3DPageProps) {
-  return <PerspectiveGenerator apiKey={apiKey} replicateToken={replicateToken} />;
+  return <UnifiedMeshGenerator apiKey={apiKey} replicateToken={replicateToken} />;
 }

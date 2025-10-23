@@ -1,9 +1,4 @@
-import {
-  BrowserRouter,
-  Routes,
-  Route,
-  Navigate,
-} from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -15,9 +10,10 @@ import { EtheralShadow } from "@/components/ui/shadcn-io/etheral-shadow";
 import { Toaster } from "@/components/ui/sonner";
 import { AppLayout } from "@/components/AppLayout";
 import { HomePage } from "@/pages/HomePage";
-import { GenerateImageAnd3DPage } from "@/pages/GenerateImageAnd3DPage";
+import { GenerateImageAnd3DPage } from "@/pages/GenerateMeshPage";
 import { SingleImagePage } from "@/pages/SingleImagePage";
 import { Generate3DAssetPage } from "@/pages/Generate3DAssetPage";
+import { VelocePage } from "@/pages/VelocePage";
 import { Key } from "lucide-react";
 
 function App() {
@@ -135,12 +131,11 @@ function App() {
               />
               <Route
                 path="/generate-3d-asset"
-                element={<Generate3DAssetPage replicateToken={replicateToken} />}
+                element={
+                  <Generate3DAssetPage replicateToken={replicateToken} />
+                }
               />
-              <Route
-                path="/veloce"
-                element={<Generate3DAssetPage replicateToken={replicateToken} />}
-              />
+              <Route path="/veloce" element={<VelocePage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </EtheralShadow>

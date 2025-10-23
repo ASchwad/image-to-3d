@@ -10,37 +10,28 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import {
   GeminiImageService,
-  type GeneratedImage,
   type ReferenceImage,
 } from "@/services/gemini";
 import { FluxImageService } from "@/services/flux";
-import {
-  TrellisService,
-  type MeshGenerationProgress,
-  type TrellisOutput,
-} from "@/services/trellis";
+import { TrellisService } from "@/services/trellis";
 import {
   Download,
   Image as ImageIcon,
   Loader2,
-  Upload,
-  RefreshCw,
   RotateCcw,
-  Edit as EditIcon,
   Box,
 } from "lucide-react";
 import { MeshGenerationResult } from "./MeshGenerationResult";
 import { ImageUploadDropzone } from "./ImageUploadDropzone";
 import { ModelSelector } from "./ModelSelector";
+import { PerspectiveGrid } from "./PerspectiveGrid";
+import { EditPerspectiveDialog } from "./EditPerspectiveDialog";
+import { ErrorDisplay } from "./ErrorDisplay";
+import { usePerspectiveGeneration } from "@/hooks/usePerspectiveGeneration";
+import { usePerspectiveActions } from "@/hooks/usePerspectiveActions";
+import { useMeshGeneration } from "@/hooks/useMeshGeneration";
+import { PERSPECTIVE_ORDER } from "@/constants/meshGeneration";
 
 type ImageModel = "gemini" | "flux";
 
@@ -54,35 +45,11 @@ export function PerspectiveGenerator({
   replicateToken,
 }: PerspectiveGeneratorProps) {
   const [prompt, setPrompt] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generatedImages, setGeneratedImages] = useState<GeneratedImage[]>([]);
   const [referenceImages, setReferenceImages] = useState<ReferenceImage[]>([]);
   const [error, setError] = useState<string>("");
   const [selectedModel, setSelectedModel] = useState<ImageModel>("flux");
-  const [currentGeneratingPerspective, setCurrentGeneratingPerspective] =
-    useState<string | null>(null);
-  const [perspectiveLoadingStates, setPerspectiveLoadingStates] = useState<{
-    [key in "front" | "right" | "back" | "left"]: boolean;
-  }>({
-    front: false,
-    right: false,
-    back: false,
-    left: false,
-  });
   const [editingPerspective, setEditingPerspective] = useState<string | null>(
     null
-  );
-  const [editPrompt, setEditPrompt] = useState("");
-
-  // 3D mesh generation states
-  const [meshProgress, setMeshProgress] = useState<MeshGenerationProgress>({
-    status: "idle",
-  });
-  const [meshResult, setMeshResult] = useState<TrellisOutput | null>(null);
-
-  // Track which perspectives are selected for mesh generation
-  const [selectedPerspectives, setSelectedPerspectives] = useState<Set<string>>(
-    new Set(["front", "right", "back", "left"])
   );
 
   const geminiService = new GeminiImageService(apiKey);
@@ -92,6 +59,37 @@ export function PerspectiveGenerator({
   const trellisService = replicateToken
     ? new TrellisService(replicateToken)
     : null;
+
+  const {
+    generatedImages,
+    isGenerating,
+    currentGeneratingPerspective,
+    perspectiveLoadingStates,
+    generatePerspectives,
+    regenerateSpecificPerspective,
+    editSpecificPerspective,
+    regenerateAll,
+  } = usePerspectiveGeneration({
+    geminiService,
+    fluxService,
+    onError: setError,
+  });
+
+  const {
+    selectedPerspectives,
+    togglePerspectiveSelection,
+    downloadImage,
+    downloadAllImages,
+  } = usePerspectiveActions({
+    geminiService,
+    fluxService,
+  });
+
+  const { meshProgress, meshResult, generateMeshFromImages } =
+    useMeshGeneration({
+      trellisService,
+      onError: setError,
+    });
 
   const handleGenerate = async () => {
     if (referenceImages.length === 0) {
@@ -104,143 +102,12 @@ export function PerspectiveGenerator({
       return;
     }
 
-    setIsGenerating(true);
     setError("");
-    setCurrentGeneratingPerspective(null);
-    setPerspectiveLoadingStates({
-      front: false,
-      right: false,
-      back: false,
-      left: false,
-    });
-
-    try {
-      if (selectedModel === "flux" && fluxService) {
-        // Use Flux to generate 4 perspectives
-        await generateWithFlux();
-      } else {
-        // Use Gemini to generate 4 perspectives
-        await geminiService.generate3DPerspectivesSimple(
-          referenceImages[0],
-          prompt.trim() || undefined,
-          (newImage: GeneratedImage) => {
-            setGeneratedImages((prev) => {
-              const existing = prev.find(
-                (img) => img.perspective === newImage.perspective
-              );
-              if (existing) {
-                return prev.map((img) =>
-                  img.perspective === newImage.perspective ? newImage : img
-                );
-              } else {
-                return [...prev, newImage];
-              }
-            });
-            setCurrentGeneratingPerspective(null);
-          },
-          (perspective: string) => {
-            setCurrentGeneratingPerspective(perspective);
-          }
-        );
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate 4 perspectives"
-      );
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  const generateWithFlux = async () => {
-    if (!fluxService) return;
-
-    // Order: right first (like Gemini), then front, back, left
-    const perspectives = [
-      { name: "right", prompt: "right side view, 90-degree profile" },
-      {
-        name: "front",
-        prompt: "front view, facing camera directly, symmetrical composition",
-      },
-      { name: "back", prompt: "back view, rear side visible" },
-      {
-        name: "left",
-        prompt: "left side view, 90-degree profile from the left",
-      },
-    ];
-
-    let firstGeneratedImage: GeneratedImage | null = null;
-    let frontViewImage: GeneratedImage | null = null;
-
-    for (let i = 0; i < perspectives.length; i++) {
-      const perspective = perspectives[i];
-      setCurrentGeneratingPerspective(perspective.name);
-
-      // Build the prompt
-      let fullPrompt: string;
-      let referenceToUse: ReferenceImage;
-
-      if (perspective.name === "left" && frontViewImage) {
-        // Special handling for left view - use front view as reference and rotate 90 degrees left
-        fullPrompt =
-          "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
-        referenceToUse = {
-          data: frontViewImage.data,
-          mimeType: frontViewImage.mimeType,
-        };
-      } else {
-        // Include user's base prompt only for the first (right) view
-        const basePrompt = i === 0 && prompt.trim() ? `${prompt.trim()}. ` : "";
-        fullPrompt = `${basePrompt}Generate a ${perspective.prompt} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
-
-        // Use original reference for first (right) view, then use the first generated image for others
-        referenceToUse =
-          i === 0
-            ? referenceImages[0]
-            : firstGeneratedImage
-            ? ({
-                data: firstGeneratedImage.data,
-                mimeType: firstGeneratedImage.mimeType,
-              } as ReferenceImage)
-            : referenceImages[0];
-      }
-
-      const images = await fluxService.generateImages(
-        fullPrompt,
-        referenceToUse
-      );
-
-      if (images.length > 0) {
-        const image = {
-          ...images[0],
-          perspective: perspective.name as "front" | "right" | "back" | "left",
-        };
-
-        // Store first generated image (right view) to use as reference for others
-        if (i === 0) {
-          firstGeneratedImage = image;
-        }
-        // Store front view for left view generation
-        if (perspective.name === "front") {
-          frontViewImage = image;
-        }
-
-        setGeneratedImages((prev) => {
-          const existing = prev.find(
-            (img) => img.perspective === perspective.name
-          );
-          if (existing) {
-            return prev.map((img) =>
-              img.perspective === perspective.name ? image : img
-            );
-          } else {
-            return [...prev, image];
-          }
-        });
-      }
-    }
-
-    setCurrentGeneratingPerspective(null);
+    await generatePerspectives(
+      referenceImages[0],
+      selectedModel,
+      prompt.trim() || undefined
+    );
   };
 
   const handleRegenerateSpecificPerspective = async (
@@ -251,121 +118,17 @@ export function PerspectiveGenerator({
       return;
     }
 
-    setPerspectiveLoadingStates((prev) => ({ ...prev, [perspective]: true }));
     setError("");
-
-    try {
-      if (selectedModel === "flux" && fluxService) {
-        // Regenerate with Flux
-        const perspectivePrompts: { [key: string]: string } = {
-          front: "front view, facing camera directly, symmetrical composition",
-          right: "right side view, 90-degree profile",
-          back: "back view, rear side visible",
-          left: "left side view, 90-degree profile from the left",
-        };
-
-        // Use right view as reference for front, back
-        // Use front view as reference for left view
-        // Use original reference for right view
-        const rightViewImage = generatedImages.find(
-          (img) => img.perspective === "right"
-        );
-        const frontViewImage = generatedImages.find(
-          (img) => img.perspective === "front"
-        );
-
-        // Build the prompt
-        let fullPrompt: string;
-        let referenceToUse: ReferenceImage;
-
-        if (perspective === "left" && frontViewImage) {
-          // Special handling for left view - use front view as reference and rotate 90 degrees left
-          fullPrompt =
-            "Rotate this view 90 degrees to the left to show the left side profile of the object. Maintain consistent lighting, style, and white background. Orthographic side view.";
-          referenceToUse = {
-            data: frontViewImage.data,
-            mimeType: frontViewImage.mimeType,
-          };
-        } else {
-          // Include user's base prompt only for the right view
-          const basePrompt =
-            perspective === "right" && prompt.trim()
-              ? `${prompt.trim()}. `
-              : "";
-          fullPrompt = `${basePrompt}Generate a ${perspectivePrompts[perspective]} of this object. Maintain consistent lighting, style, and white background. Orthographic view.`;
-
-          referenceToUse =
-            perspective === "right" || !rightViewImage
-              ? referenceImages[0]
-              : {
-                  data: rightViewImage.data,
-                  mimeType: rightViewImage.mimeType,
-                };
-        }
-
-        const images = await fluxService.generateImages(
-          fullPrompt,
-          referenceToUse
-        );
-
-        if (images.length > 0) {
-          const newImage = {
-            ...images[0],
-            perspective: perspective,
-          };
-
-          setGeneratedImages((prev) => {
-            return prev.map((img) =>
-              img.perspective === perspective ? newImage : img
-            );
-          });
-        }
-
-        setPerspectiveLoadingStates((prev) => ({
-          ...prev,
-          [perspective]: false,
-        }));
-      } else {
-        // Regenerate with Gemini
-        const rightViewImage = generatedImages.find(
-          (img) => img.perspective === "right"
-        );
-
-        await geminiService.regenerateSpecificPerspective(
-          referenceImages[0],
-          perspective,
-          undefined,
-          prompt.trim() || undefined,
-          (newImage) => {
-            setGeneratedImages((prev) => {
-              return prev.map((img) =>
-                img.perspective === newImage.perspective ? newImage : img
-              );
-            });
-            setPerspectiveLoadingStates((prev) => ({
-              ...prev,
-              [perspective]: false,
-            }));
-          },
-          () => {
-            // Already handled by setPerspectiveLoadingStates above
-          },
-          perspective === "right" ? undefined : rightViewImage
-        );
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to regenerate perspective"
-      );
-      setPerspectiveLoadingStates((prev) => ({
-        ...prev,
-        [perspective]: false,
-      }));
-    }
+    await regenerateSpecificPerspective(
+      perspective,
+      referenceImages[0],
+      selectedModel,
+      prompt.trim() || undefined
+    );
   };
 
   const handleEditSpecificPerspective = async (
-    perspective: "front" | "right" | "back" | "left",
+    perspective: string,
     editInstructions: string
   ) => {
     if (referenceImages.length === 0) {
@@ -373,122 +136,27 @@ export function PerspectiveGenerator({
       return;
     }
 
-    const currentImage = generatedImages.find(
-      (img) => img.perspective === perspective
-    );
-    if (!currentImage) {
-      setError("No existing image found for this perspective");
-      return;
-    }
-
-    setPerspectiveLoadingStates((prev) => ({ ...prev, [perspective]: true }));
     setError("");
-
-    try {
-      if (selectedModel === "flux" && fluxService) {
-        // Edit with Flux
-        const perspectivePrompts: { [key: string]: string } = {
-          front: "front view, facing camera directly, symmetrical composition",
-          right: "right side view, 90-degree profile",
-          back: "back view, rear side visible",
-          left: "180° rotated view showing the opposite side",
-        };
-
-        const fullPrompt = `${editInstructions}. Maintain ${perspectivePrompts[perspective]} of this object. Keep consistent lighting, style, and white background. Orthographic view.`;
-
-        // For Flux, we'll use the current generated image as reference
-        const currentImageAsReference: ReferenceImage = {
-          data: currentImage.data,
-          mimeType: currentImage.mimeType,
-        };
-
-        const images = await fluxService.generateImages(
-          fullPrompt,
-          currentImageAsReference
-        );
-
-        if (images.length > 0) {
-          const newImage = {
-            ...images[0],
-            perspective: perspective,
-          };
-
-          setGeneratedImages((prev) => {
-            return prev.map((img) =>
-              img.perspective === perspective ? newImage : img
-            );
-          });
-        }
-
-        setPerspectiveLoadingStates((prev) => ({
-          ...prev,
-          [perspective]: false,
-        }));
-      } else {
-        // Edit with Gemini
-        const rightViewImage = generatedImages.find(
-          (img) => img.perspective === "right"
-        );
-
-        await geminiService.editSpecificPerspective(
-          referenceImages[0],
-          perspective,
-          undefined,
-          currentImage,
-          editInstructions,
-          prompt.trim() || undefined,
-          (newImage) => {
-            setGeneratedImages((prev) => {
-              return prev.map((img) =>
-                img.perspective === newImage.perspective ? newImage : img
-              );
-            });
-            setPerspectiveLoadingStates((prev) => ({
-              ...prev,
-              [perspective]: false,
-            }));
-          },
-          () => {
-            // Already handled by setPerspectiveLoadingStates above
-          },
-          perspective === "right" ? undefined : rightViewImage
-        );
-      }
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to edit perspective"
-      );
-      setPerspectiveLoadingStates((prev) => ({
-        ...prev,
-        [perspective]: false,
-      }));
-    }
+    await editSpecificPerspective(
+      perspective as "front" | "right" | "back" | "left",
+      editInstructions,
+      referenceImages[0],
+      selectedModel,
+      prompt.trim() || undefined
+    );
   };
 
   const handleRegenerateAll = () => {
-    setGeneratedImages([]);
-    setCurrentGeneratingPerspective(null);
-    setPerspectiveLoadingStates({
-      front: false,
-      right: false,
-      back: false,
-      left: false,
-    });
-    handleGenerate();
+    if (referenceImages.length === 0) return;
+    regenerateAll(referenceImages[0], selectedModel, prompt.trim() || undefined);
   };
 
-  const handleDownload = (image: GeneratedImage) => {
-    console.log("handle download", image);
-
-    if (selectedModel === "flux" && fluxService) {
-      fluxService.downloadImage(image);
-    } else {
-      geminiService.downloadImage(image);
-    }
+  const handleDownload = (image: any) => {
+    downloadImage(image, selectedModel);
   };
 
   const handleBatchDownload = () => {
-    geminiService.downloadAllImages(generatedImages);
+    downloadAllImages(generatedImages);
   };
 
   const handleFilesSelected = async (files: FileList) => {
@@ -507,7 +175,6 @@ export function PerspectiveGenerator({
           return;
         }
 
-        // Use the appropriate service based on selected model
         const service =
           selectedModel === "flux" && fluxService ? fluxService : geminiService;
         const referenceImage = await service.fileToReferenceImage(file);
@@ -524,18 +191,6 @@ export function PerspectiveGenerator({
     setReferenceImages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  const togglePerspectiveSelection = (perspective: string) => {
-    setSelectedPerspectives((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(perspective)) {
-        newSet.delete(perspective);
-      } else {
-        newSet.add(perspective);
-      }
-      return newSet;
-    });
-  };
-
   const handleGenerate3DMesh = async () => {
     if (!trellisService) {
       setError("Replicate API token not configured");
@@ -547,9 +202,9 @@ export function PerspectiveGenerator({
       return;
     }
 
-    // Only include selected perspectives that have generated images
-    const orderedImages = ["front", "right", "back", "left"]
-      .filter((perspective) => selectedPerspectives.has(perspective))
+    const orderedImages = PERSPECTIVE_ORDER.filter((perspective) =>
+      selectedPerspectives.has(perspective)
+    )
       .map((perspective) => {
         const image = generatedImages.find(
           (img) => img.perspective === perspective
@@ -566,23 +221,7 @@ export function PerspectiveGenerator({
     }
 
     setError("");
-    setMeshResult(null);
-
-    try {
-      const result = await trellisService.generate3DMesh(
-        orderedImages,
-        (progress) => {
-          setMeshProgress(progress);
-        }
-      );
-
-      setMeshResult(result);
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Failed to generate 3D mesh"
-      );
-      setMeshProgress({ status: "idle" });
-    }
+    await generateMeshFromImages(orderedImages);
   };
 
   return (
@@ -601,12 +240,6 @@ export function PerspectiveGenerator({
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <ModelSelector
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              replicateToken={replicateToken}
-            />
-
             <ImageUploadDropzone
               id="reference-images"
               label="Reference Images (required)"
@@ -622,6 +255,11 @@ export function PerspectiveGenerator({
               }))}
               onRemoveImage={(id) => removeReferenceImage(id as number)}
             />
+            <ModelSelector
+              selectedModel={selectedModel}
+              onModelChange={setSelectedModel}
+              replicateToken={replicateToken}
+            />
 
             <div className="space-y-2">
               <Label htmlFor="prompt">
@@ -636,11 +274,7 @@ export function PerspectiveGenerator({
               />
             </div>
 
-            {error && (
-              <div className="p-3 text-sm text-red-600 bg-red-50 rounded-md border border-red-200">
-                {error}
-              </div>
-            )}
+            <ErrorDisplay error={error} />
 
             <Button
               onClick={handleGenerate}
@@ -659,8 +293,6 @@ export function PerspectiveGenerator({
           </CardContent>
         </Card>
 
-        {/* Analysis and Prompts Display */}
-
         {generatedImages.length > 0 && (
           <Card>
             <CardHeader>
@@ -671,164 +303,26 @@ export function PerspectiveGenerator({
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  {["front", "right", "back", "left"].map((perspective) => {
-                    const image = generatedImages.find(
-                      (img) => img.perspective === perspective
-                    );
-                    const isCurrentlyGenerating =
-                      currentGeneratingPerspective === perspective;
-                    const isRegenerating =
-                      perspectiveLoadingStates[
-                        perspective as "front" | "right" | "back" | "left"
-                      ];
-                    const isProcessing =
-                      isCurrentlyGenerating || isRegenerating;
-                    const isSelected = selectedPerspectives.has(perspective);
-                    return (
-                      <div key={perspective} className="relative group">
-                        <div
-                          className={`aspect-square bg-gray-100 rounded-lg border-2 overflow-hidden ${
-                            isProcessing
-                              ? "border-blue-400 bg-blue-50"
-                              : isSelected
-                              ? "border-blue-500"
-                              : "border-gray-300"
-                          }`}
-                        >
-                          {image ? (
-                            <>
-                              <img
-                                src={(selectedModel === "flux" && fluxService
-                                  ? fluxService
-                                  : geminiService
-                                ).createImageUrl(image)}
-                                alt={`${perspective} view`}
-                                className={`w-full h-full object-cover transition-opacity ${
-                                  isSelected ? "opacity-100" : "opacity-40"
-                                }`}
-                              />
-                              {/* Selection checkbox overlay */}
-                              <div className="absolute top-2 left-2 z-10">
-                                <button
-                                  onClick={() =>
-                                    togglePerspectiveSelection(perspective)
-                                  }
-                                  className={`w-6 h-6 rounded border-2 flex items-center justify-center transition-all ${
-                                    isSelected
-                                      ? "bg-blue-500 border-blue-500"
-                                      : "bg-white border-gray-300 hover:border-gray-400"
-                                  }`}
-                                  title={
-                                    isSelected
-                                      ? "Deselect for mesh generation"
-                                      : "Select for mesh generation"
-                                  }
-                                >
-                                  {isSelected && (
-                                    <svg
-                                      className="w-4 h-4 text-white"
-                                      fill="none"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2"
-                                      viewBox="0 0 24 24"
-                                      stroke="currentColor"
-                                    >
-                                      <path d="M5 13l4 4L19 7" />
-                                    </svg>
-                                  )}
-                                </button>
-                              </div>
-                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
-                                <Button
-                                  onClick={() => handleDownload(image)}
-                                  size="sm"
-                                  variant="secondary"
-                                  className="flex items-center gap-1"
-                                >
-                                  <Download className="w-3 h-3" />
-                                  Download
-                                </Button>
-                                <Button
-                                  onClick={() =>
-                                    handleRegenerateSpecificPerspective(
-                                      perspective as
-                                        | "front"
-                                        | "right"
-                                        | "back"
-                                        | "left"
-                                    )
-                                  }
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={isGenerating || isRegenerating}
-                                  className="flex items-center gap-1"
-                                >
-                                  <RefreshCw className="w-3 h-3" />
-                                  Regenerate
-                                </Button>
-                                <Button
-                                  onClick={() => {
-                                    setEditingPerspective(perspective);
-                                    setEditPrompt("");
-                                  }}
-                                  size="sm"
-                                  variant="secondary"
-                                  disabled={isGenerating || isRegenerating}
-                                  className="flex items-center gap-1"
-                                >
-                                  <EditIcon className="w-3 h-3" />
-                                  Edit
-                                </Button>
-                              </div>
-                              {isRegenerating && (
-                                <div className="absolute inset-0 bg-blue-50/90 flex items-center justify-center">
-                                  <div className="flex flex-col items-center gap-2">
-                                    <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                    <span className="text-xs text-blue-600">
-                                      Regenerating...
-                                    </span>
-                                  </div>
-                                </div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-gray-400">
-                              {isCurrentlyGenerating ? (
-                                <div className="flex flex-col items-center gap-2">
-                                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
-                                  <span className="text-xs text-blue-600">
-                                    Generating...
-                                  </span>
-                                </div>
-                              ) : (
-                                <div className="text-xs">Waiting...</div>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-center mt-2">
-                          <Label
-                            className={`text-sm font-medium capitalize ${
-                              isProcessing ? "text-blue-600" : ""
-                            }`}
-                          >
-                            {perspective} View
-                            {isProcessing && (
-                              <span className="ml-1 text-blue-500">●</span>
-                            )}
-                          </Label>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                <PerspectiveGrid
+                  generatedImages={generatedImages}
+                  currentGeneratingPerspective={currentGeneratingPerspective}
+                  perspectiveLoadingStates={perspectiveLoadingStates}
+                  selectedPerspectives={selectedPerspectives}
+                  selectedModel={selectedModel}
+                  geminiService={geminiService}
+                  fluxService={fluxService}
+                  onToggleSelection={togglePerspectiveSelection}
+                  onDownload={handleDownload}
+                  onRegenerate={handleRegenerateSpecificPerspective}
+                  onEdit={setEditingPerspective}
+                  isGenerating={isGenerating}
+                />
                 {generatedImages.length > 0 && (
                   <div className="space-y-2">
                     {trellisService && selectedPerspectives.size > 0 && (
                       <div className="text-center text-sm text-muted-foreground">
-                        {selectedPerspectives.size} of {generatedImages.length} images selected for mesh generation
+                        {selectedPerspectives.size} of {generatedImages.length}{" "}
+                        images selected for mesh generation
                       </div>
                     )}
                     <div className="flex justify-center gap-2 pt-2">
@@ -863,15 +357,15 @@ export function PerspectiveGenerator({
                           meshProgress.status === "generating" ? (
                             <>
                               <Loader2 className="w-4 h-4 animate-spin" />
-                              {meshProgress.message ||
-                                "Generating 3D Mesh..."}
+                              {meshProgress.message || "Generating 3D Mesh..."}
                             </>
                           ) : (
                             <>
                               <Box className="w-4 h-4" />
                               Generate 3D Mesh
                               {selectedPerspectives.size > 0 &&
-                                selectedPerspectives.size < generatedImages.length &&
+                                selectedPerspectives.size <
+                                  generatedImages.length &&
                                 ` (${selectedPerspectives.size})`}
                             </>
                           )}
@@ -903,76 +397,12 @@ export function PerspectiveGenerator({
           trellisService={trellisService}
         />
 
-        <Dialog
-          open={!!editingPerspective}
-          onOpenChange={(open) => {
-            if (!open) {
-              setEditingPerspective(null);
-              setEditPrompt("");
-            }
-          }}
-        >
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>
-                Edit{" "}
-                {editingPerspective
-                  ? editingPerspective.charAt(0).toUpperCase() +
-                    editingPerspective.slice(1)
-                  : ""}{" "}
-                View
-              </DialogTitle>
-              <DialogDescription>
-                What would you like to change?
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="edit-prompt">Modifications</Label>
-                <Textarea
-                  id="edit-prompt"
-                  placeholder="e.g., Make it brighter, change the color to blue, add more detail..."
-                  value={editPrompt}
-                  onChange={(e) => setEditPrompt(e.target.value)}
-                  rows={3}
-                  className="mt-1"
-                />
-              </div>
-            </div>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setEditingPerspective(null);
-                  setEditPrompt("");
-                }}
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={async () => {
-                  if (editPrompt.trim()) {
-                    const perspective = editingPerspective as
-                      | "front"
-                      | "right"
-                      | "back"
-                      | "left";
-                    const prompt = editPrompt.trim();
-                    setEditingPerspective(null);
-                    setEditPrompt("");
-                    await handleEditSpecificPerspective(perspective, prompt);
-                  }
-                }}
-                disabled={
-                  !editPrompt.trim() ||
-                  Object.values(perspectiveLoadingStates).some(Boolean)
-                }
-              >
-                Apply Changes
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <EditPerspectiveDialog
+          perspective={editingPerspective}
+          onClose={() => setEditingPerspective(null)}
+          onApply={handleEditSpecificPerspective}
+          isLoading={Object.values(perspectiveLoadingStates).some(Boolean)}
+        />
       </div>
     </div>
   );

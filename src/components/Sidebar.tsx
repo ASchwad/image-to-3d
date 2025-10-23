@@ -98,7 +98,7 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
               isCollapsed ? "w-0 opacity-0" : "opacity-100"
             }`}
           >
-            <h2 className="font-semibold text-lg">Maggio</h2>
+            <h2 className="font-semibold text-lg">GumoStudio</h2>
             <div
               className={`pr-4 transition-opacity duration-200 ${
                 isCollapsed ? "opacity-0" : "opacity-0 group-hover:opacity-100"
@@ -142,10 +142,10 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
         />
         <SidebarItem
           icon={Move3D}
-          label="Generate 3D asset"
+          label="Veloce"
           isCollapsed={isCollapsed}
-          to="/generate-3d-asset"
-          isActive={location.pathname === "/generate-3d-asset"}
+          to="/veloce"
+          isActive={location.pathname === "/veloce"}
         />
       </div>
 
