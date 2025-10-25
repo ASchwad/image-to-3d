@@ -5,7 +5,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Box, Image, Move3D } from "lucide-react";
+import { Box, Image, Move3D, Video } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { motion } from "framer-motion";
 
@@ -109,6 +109,27 @@ export function HomePage() {
                   <div className="flex gap-2 mt-3">
                     <Badge variant="secondary">GPT-5</Badge>
                     <Badge variant="secondary">Remotion</Badge>
+                  </div>
+                </CardHeader>
+              </Card>
+            </Link>
+          </motion.div>
+
+          <motion.div variants={item}>
+            <Link to="/sora">
+              <Card className="h-full cursor-pointer transition-transform duration-300 ease-out hover:scale-101">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Video className="w-5 h-5" />
+                    Sora Video Generator
+                  </CardTitle>
+                  <CardDescription>
+                    Generate AI videos from text prompts using OpenAI's Sora-2
+                    model
+                  </CardDescription>
+                  <div className="flex gap-2 mt-3">
+                    <Badge variant="secondary">Sora-2</Badge>
+                    <Badge variant="secondary">OpenAI</Badge>
                   </div>
                 </CardHeader>
               </Card>

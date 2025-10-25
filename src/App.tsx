@@ -14,6 +14,7 @@ import { GenerateImageAnd3DPage } from "@/pages/GenerateMeshPage";
 import { SingleImagePage } from "@/pages/SingleImagePage";
 import { Generate3DAssetPage } from "@/pages/Generate3DAssetPage";
 import { VelocePage } from "@/pages/VelocePage";
+import { SoraPage } from "@/pages/SoraPage";
 import { Key } from "lucide-react";
 
 function App() {
@@ -136,6 +137,7 @@ function App() {
                 }
               />
               <Route path="/veloce" element={<VelocePage />} />
+              <Route path="/sora" element={<SoraPage />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </EtheralShadow>

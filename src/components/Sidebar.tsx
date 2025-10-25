@@ -17,6 +17,7 @@ import {
   Sparkles,
   User,
   Settings,
+  Video,
 } from "lucide-react";
 
 interface SidebarProps {
@@ -154,6 +155,13 @@ export function Sidebar({ content, onWidthChange }: SidebarProps) {
           isCollapsed={isCollapsed}
           to="/veloce"
           isActive={location.pathname === "/veloce"}
+        />
+        <SidebarItem
+          icon={Video}
+          label="Sora Video"
+          isCollapsed={isCollapsed}
+          to="/sora"
+          isActive={location.pathname === "/sora"}
         />
       </div>
 
